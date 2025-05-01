@@ -92,6 +92,8 @@ This project is open-source under the MIT License.
 
 ## 👨‍💻 Contributors
 
-- [Your Name](https://github.com/yourusername) – Hardware & Software Engineer
-- [Team Member 2](https://github.com/username2) – Mobile App Developer
+- (https://github.com/DhananiChathumini) – Hardware & Software Engineer
+- (https://github.com/VikumPrabhath) – Mobile App Developer
+- https://github.com/yasithh1
+
 
