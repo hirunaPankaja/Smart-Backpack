@@ -56,12 +56,6 @@ To better understand how the components are set up in the backpack, refer to the
 ![3D Smart Backpack View](backpack-view.gif)
 
 
-
-📐 Alternatively, include a wiring diagram or 2D schematic that shows:
-- Placement of sensors inside the bag
-- Wiring connections to ESP32S
-- Battery and module housing
-
 ---
 - The schematic diagram will be uploaded soon.
 ---
