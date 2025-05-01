@@ -40,7 +40,7 @@ The **Smart Backpack** is an innovative IoT-based system designed for students, 
 
 ## 📱 Mobile Application
 
-- Built using **Flutter / React Native** (suggested)
+- Built using XML , Kotlin
 - Displays:
   - Current weight
   - Missing items
@@ -80,13 +80,7 @@ To better understand how the components are set up in the backpack, refer to the
 - **Arduino IDE**
 - **ESP32 Libraries**
 - **Flutter / React Native (Mobile App)**
-- **Fritzing / TinkerCAD (for circuit simulation or diagrams)**
-
----
-
-## 📄 License
-
-This project is open-source under the MIT License.
+- **Fritzing / TinkerCAD / Autodesk Fusion (for circuit simulation or diagrams)**
 
 ---
 
@@ -95,7 +89,7 @@ This project is open-source under the MIT License.
 - [Hiruna Pankaja](https://github.com/hirunaPankaja) – Hardware & Software Engineer  
 - [Dhanani Chathumini](https://github.com/DhananiChathumini) – Mobile App Developer  
 - [Vikum Prabhath](https://github.com/VikumPrabhath) – Mobile App Developer  
-- [Yasith H.](https://github.com/yasithh1) – Hardware & Software Engineer
+- [Yasith Pasindu](https://github.com/yasithh1) – Hardware & Software Engineer
 
 
 
