@@ -54,7 +54,7 @@ The **Smart Backpack** is an innovative IoT-based system designed for students, 
 
 To better understand how the components are set up in the backpack, refer to the diagram or animation:
 
-> 📌 **[Click here to view the 3D backpack layout animation](#)**  
+![3D Smart Backpack View](backpack-view.gif) 
 > *(You can embed a `.gif`, `.mp4`, or link to a YouTube animation/demo video.)*
 
 📐 Alternatively, include a wiring diagram or 2D schematic that shows:
