@@ -62,8 +62,8 @@ To better understand how the components are set up in the backpack, refer to the
 - Wiring connections to ESP32S
 - Battery and module housing
 
-  ---
-- It is being uploaded.
+---
+- The schematic diagram will be uploaded soon.
 ---
 
 ## 🚀 Future Improvements
