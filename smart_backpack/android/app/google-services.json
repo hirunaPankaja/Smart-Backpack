@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "284980732824",
+    "firebase_url": "https://esp32-test-a1771-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "esp32-test-a1771",
+    "storage_bucket": "esp32-test-a1771.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:284980732824:android:ab14f0321ead11b47781ed",
+        "android_client_info": {
+          "package_name": "com.example.smart_bacpack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChHbQEE3oHf5E_tNZmDRlppzr6jaYGfio"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
