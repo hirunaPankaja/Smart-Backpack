@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'screen/login_screen.dart';
 import 'screen/dashboard_screen.dart';
 
 void main() {
@@ -18,8 +17,7 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const LoginScreen(),
-        '/dashboard': (context) => const DashboardScreen(),
+        '/': (context) => const DashboardScreen()
       },
     );
   }
