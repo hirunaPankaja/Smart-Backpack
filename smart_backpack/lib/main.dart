@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart'; // ✅ Add this
 import 'screen/dashboard_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // ✅ Needed before Firebase.init
+  await Firebase.initializeApp(); // ✅ Initialize Firebase
   runApp(const MyApp());
 }
 
@@ -17,7 +20,7 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const DashboardScreen()
+        '/': (context) => const DashboardScreen(),
       },
     );
   }
