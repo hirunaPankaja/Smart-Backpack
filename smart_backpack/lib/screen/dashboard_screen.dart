@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
-import '../widget/info_card.dart';
+import '../widget/blinking_card.dart';
 import '../widget/bag_overview_card.dart';
-
-
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -87,11 +85,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 1,
                 shrinkWrap: true,
-                childAspectRatio: 3.5,
+                childAspectRatio: 4.5, // Adjusted for better spacing
                 children: [
-                  InfoCard(title: 'Left Pressure (Sensor1)', icon: Icons.speed, value: '$sensor1 kg', iconColor: Colors.purple),
-                  InfoCard(title: 'Right Pressure (Sensor2)', icon: Icons.speed, value: '$sensor2 kg', iconColor: Colors.pink),
-                  InfoCard(title: 'Net Weight', icon: Icons.fitness_center, value: '$net kg', iconColor: Colors.indigo),
+                  InfoCard(title: 'Left Pressure (Sensor1)', icon: Icons.speed, value: '$sensor1 kg', iconColor: Colors.purple, fitted: true),
+                  InfoCard(title: 'Right Pressure (Sensor2)', icon: Icons.speed, value: '$sensor2 kg', iconColor: Colors.pink, fitted: true),
+                  InfoCard(title: 'Net Weight', icon: Icons.fitness_center, value: '$net kg', iconColor: Colors.indigo, fitted: true),
                 ],
               ),
             ],
@@ -102,67 +100,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class BlinkingCard extends StatefulWidget {
+class InfoCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final String value;
   final Color iconColor;
-  final bool shouldBlink;
+  final bool fitted;
 
-  const BlinkingCard({
+  const InfoCard({
     super.key,
     required this.title,
     required this.icon,
     required this.value,
     required this.iconColor,
-    required this.shouldBlink,
+    this.fitted = false,
   });
 
   @override
-  State<BlinkingCard> createState() => _BlinkingCardState();
-}
-
-class _BlinkingCardState extends State<BlinkingCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Color?> _colorTween;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(duration: const Duration(milliseconds: 800), vsync: this)..repeat(reverse: true);
-    _colorTween = ColorTween(begin: Colors.white, end: Colors.red[100]).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, child) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: widget.shouldBlink ? _colorTween.value : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 6)],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(widget.icon, color: widget.iconColor, size: 28),
-              const Spacer(),
-              Text(widget.value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(widget.title, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-            ],
-          ),
-        );
-      },
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 6)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: iconColor, size: 28),
+          const Spacer(),
+          fitted
+              ? FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              : Text(value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+        ],
+      ),
     );
   }
 }
