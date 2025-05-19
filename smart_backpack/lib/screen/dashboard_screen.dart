@@ -3,6 +3,7 @@ import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
 import '../widget/bag_overview_card.dart';
+import '../widget/info_card.dart'; // ✅ Ensure InfoCard is imported
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -59,8 +60,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               const BatteryIndicator(batteryLevel: 0.76),
               const SizedBox(height: 20),
-              BagOverviewCard(orientation: orientation),
+
+              /// ✅ Left & Right Pressure Indicators (Before Backpack)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  LeftPressureIndicator(sensor1: sensor1),
+                  RightPressureIndicator(sensor2: sensor2),
+                ],
+              ),
+              
               const SizedBox(height: 20),
+
+              /// ✅ Backpack Overview
+              BagOverviewCard(orientation: orientation),
+
+              const SizedBox(height: 20),
+
+              /// ✅ Smart Backpack Status Details
               GridView.count(
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
@@ -81,16 +98,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              GridView.count(
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 1,
-                shrinkWrap: true,
-                childAspectRatio: 4.5, // Adjusted for better spacing
-                children: [
-                  InfoCard(title: 'Left Pressure (Sensor1)', icon: Icons.speed, value: '$sensor1 kg', iconColor: Colors.purple, fitted: true),
-                  InfoCard(title: 'Right Pressure (Sensor2)', icon: Icons.speed, value: '$sensor2 kg', iconColor: Colors.pink, fitted: true),
-                  InfoCard(title: 'Net Weight', icon: Icons.fitness_center, value: '$net kg', iconColor: Colors.indigo, fitted: true),
-                ],
+
+              /// ✅ Net Weight Display
+              InfoCard(
+                title: 'Net Weight',
+                icon: Icons.fitness_center,
+                value: '$net kg',
+                iconColor: Colors.indigo,
               ),
             ],
           ),
@@ -100,49 +114,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class InfoCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final String value;
-  final Color iconColor;
-  final bool fitted;
+class LeftPressureIndicator extends StatelessWidget {
+  final double sensor1;
+  final String imagePath = "assests/left_side.png"; // ✅ Single image
 
-  const InfoCard({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.value,
-    required this.iconColor,
-    this.fitted = false,
-  });
+  const LeftPressureIndicator({super.key, required this.sensor1});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 6)],
+        color: sensor1 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent, // ✅ Dynamic warning background
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 28),
-          const Spacer(),
-          fitted
-              ? FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    value,
-                    style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                )
-              : Text(value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+          Image.asset(imagePath, width: 80, height: 80), // ✅ Always use same image
+          const SizedBox(height: 6),
+          Text(
+            "$sensor1 kg",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: sensor1 > 5 ? Colors.red : Colors.black, // ✅ Dynamic text color
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RightPressureIndicator extends StatelessWidget {
+  final double sensor2;
+  final String imagePath = "assests/right_side.png"; // ✅ Single image
+
+  const RightPressureIndicator({super.key, required this.sensor2});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: sensor2 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent, // ✅ Dynamic warning background
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Image.asset(imagePath, width: 80, height: 80), // ✅ Always use same image
+          const SizedBox(height: 6),
+          Text(
+            "$sensor2 kg",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: sensor2 > 5 ? Colors.red : Colors.black, // ✅ Dynamic text color
+            ),
+          ),
         ],
       ),
     );

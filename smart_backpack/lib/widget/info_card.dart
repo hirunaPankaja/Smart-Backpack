@@ -1,4 +1,3 @@
-// info_card.dart
 import 'package:flutter/material.dart';
 
 class InfoCard extends StatelessWidget {
@@ -25,13 +24,22 @@ class InfoCard extends StatelessWidget {
         boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 6)],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center, // ✅ Centered contents
+        crossAxisAlignment: CrossAxisAlignment.center, // ✅ Horizontal centering
         children: [
           Icon(icon, color: iconColor, size: 28),
-          const Spacer(),
-          Text(value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+          const SizedBox(height: 12),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value, // ✅ Dynamically scales text
+              style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(title, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
         ],
       ),
     );
