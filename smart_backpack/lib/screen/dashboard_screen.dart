@@ -3,7 +3,10 @@ import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
 import '../widget/bag_overview_card.dart';
-import '../widget/info_card.dart'; // ✅ Ensure InfoCard is imported
+import '../widget/info_card.dart';
+import '../dialogs/pressure_adjustment_popup.dart';
+import '../widget/InsideBagPressure.dart';
+import '../widget/net_weight_widget.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -48,7 +51,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text('Smart Backpack', style: TextStyle(color: Colors.black)),
+        title: const Text(
+          'Smart Backpack',
+          style: TextStyle(color: Colors.black),
+        ),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
@@ -69,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   RightPressureIndicator(sensor2: sensor2),
                 ],
               ),
-              
+
               const SizedBox(height: 20),
 
               /// ✅ Backpack Overview
@@ -85,9 +91,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 children: [
-                  const InfoCard(title: 'Items Detected', icon: Icons.inventory_2, value: '4', iconColor: Colors.orange),
-                  const InfoCard(title: 'Temperature', icon: Icons.thermostat, value: '32°C', iconColor: Colors.redAccent),
-                  const InfoCard(title: 'Last Sync', icon: Icons.update, value: '5 min ago', iconColor: Colors.blue),
+                  const InfoCard(
+                    title: 'Items Detected',
+                    icon: Icons.inventory_2,
+                    value: '4',
+                    iconColor: Colors.orange,
+                  ),
+                  const InfoCard(
+                    title: 'Temperature',
+                    icon: Icons.thermostat,
+                    value: '32°C',
+                    iconColor: Colors.redAccent,
+                  ),
+                  const InfoCard(
+                    title: 'Last Sync',
+                    icon: Icons.update,
+                    value: '5 min ago',
+                    iconColor: Colors.blue,
+                  ),
                   BlinkingCard(
                     title: 'Water Detect',
                     icon: Icons.water_drop,
@@ -97,15 +118,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 20),
 
-              /// ✅ Net Weight Display
-              InfoCard(
-                title: 'Net Weight',
-                icon: Icons.fitness_center,
-                value: '$net kg',
-                iconColor: Colors.indigo,
+              /// ✅ Inside Bag Pressure Widget (Styled like Net Weight UI)
+              GestureDetector(
+                onTap: () async {
+                  final adjustedPressure = await showDialog(
+                    context: context,
+                    builder:
+                        (context) => PressureAdjustmentPopup(
+                          initialPressure: net,
+                          onPressureChanged: (newPressure) {
+                            setState(() {
+                              net =
+                                  newPressure; // ✅ Ensure real-time updates sync with popup
+                            });
+                          },
+                        ),
+                  );
+
+                  if (adjustedPressure != null) {
+                    setState(() {
+                      net = adjustedPressure; // ✅ Final state update when saved
+                    });
+                  }
+                },
+                child: InsideBagPressureWidget(
+                  insidePressure: net,
+                ), // ✅ Ensure correct widget name
               ),
+
+              const SizedBox(height: 20),
+
+              /// ✅ Net Weight Display (Styled Like InsideBagPressureWidget)
+              NetWeightWidget(netWeight: net),
             ],
           ),
         ),
@@ -125,19 +172,29 @@ class LeftPressureIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: sensor1 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent, // ✅ Dynamic warning background
+        color:
+            sensor1 > 5
+                ? Colors.red.withOpacity(0.3)
+                : Colors.transparent, // ✅ Dynamic warning background
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
-          Image.asset(imagePath, width: 80, height: 80), // ✅ Always use same image
+          Image.asset(
+            imagePath,
+            width: 80,
+            height: 80,
+          ), // ✅ Always use same image
           const SizedBox(height: 6),
           Text(
             "$sensor1 kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: sensor1 > 5 ? Colors.red : Colors.black, // ✅ Dynamic text color
+              color:
+                  sensor1 > 5
+                      ? Colors.red
+                      : Colors.black, // ✅ Dynamic text color
             ),
           ),
         ],
@@ -157,19 +214,29 @@ class RightPressureIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: sensor2 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent, // ✅ Dynamic warning background
+        color:
+            sensor2 > 5
+                ? Colors.red.withOpacity(0.3)
+                : Colors.transparent, // ✅ Dynamic warning background
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
-          Image.asset(imagePath, width: 80, height: 80), // ✅ Always use same image
+          Image.asset(
+            imagePath,
+            width: 80,
+            height: 80,
+          ), // ✅ Always use same image
           const SizedBox(height: 6),
           Text(
             "$sensor2 kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: sensor2 > 5 ? Colors.red : Colors.black, // ✅ Dynamic text color
+              color:
+                  sensor2 > 5
+                      ? Colors.red
+                      : Colors.black, // ✅ Dynamic text color
             ),
           ),
         ],
