@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
@@ -21,31 +23,164 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double sensor1 = 0;
   double sensor2 = 0;
   double net = 0;
+  Map<String, String> cardNames = {};
+  Map<String, String> cardStatuses = {};
+  double batteryLevel = 0;
+  bool isCharging = false;
 
   final FirebaseService _firebaseService = FirebaseService();
+  late DatabaseReference _positionRef;
+  late DatabaseReference _waterLeakRef;
+  late DatabaseReference _pressureRef;
+  late DatabaseReference _cardsRef;
+  late DatabaseReference _batteryRef;
 
   @override
   void initState() {
     super.initState();
-    fetchData();
+    _loadCardNames();
+    _setupRealTimeListeners();
   }
 
-  Future<void> fetchData() async {
-    final pos = await _firebaseService.getBackpackPosition();
-    final waterLeak = await _firebaseService.getWaterLeakStatus();
-    final pressure = await _firebaseService.getPressureData();
-
+  Future<void> _loadCardNames() async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      orientation = pos;
-      isWaterLeaking = waterLeak;
-      sensor1 = double.tryParse(pressure['sensor1'].toString()) ?? 0;
-      sensor2 = double.tryParse(pressure['sensor2'].toString()) ?? 0;
-      net = double.tryParse(pressure['net'].toString()) ?? 0;
+      cardNames = {
+        'card1': prefs.getString('card1_name') ?? 'Card 1',
+        'card2': prefs.getString('card2_name') ?? 'Card 2',
+        'card3': prefs.getString('card3_name') ?? 'Card 3',
+        'card4': prefs.getString('card4_name') ?? 'Card 4',
+      };
     });
+  }
+
+  Future<void> _saveCardName(String cardKey, String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('${cardKey}_name', name);
+    setState(() {
+      cardNames[cardKey] = name;
+    });
+  }
+
+  void _setupRealTimeListeners() {
+    _positionRef = _firebaseService.getPositionRef();
+    _waterLeakRef = _firebaseService.getWaterLeakRef();
+    _pressureRef = _firebaseService.getPressureRef();
+    _cardsRef = _firebaseService.getCardsRef();
+    _batteryRef = _firebaseService.getBatteryRef();
+
+    _positionRef.onValue.listen((event) {
+      final data = event.snapshot.value;
+      if (data != null) {
+        setState(() {
+          orientation = data.toString();
+        });
+      }
+    });
+
+    _waterLeakRef.onValue.listen((event) {
+      final data = event.snapshot.value;
+      if (data != null) {
+        setState(() {
+          isWaterLeaking = data == true;
+        });
+      }
+    });
+
+    _pressureRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data != null) {
+        setState(() {
+          sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
+          sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
+          net = double.tryParse(data['net'].toString()) ?? 0;
+        });
+      }
+    });
+
+    _cardsRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data != null) {
+        setState(() {
+          cardStatuses = Map<String, String>.from(data.map((key, value) => 
+            MapEntry(key.toString(), (value as Map)['status'].toString())));
+        });
+      }
+    });
+
+    _batteryRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data != null) {
+        setState(() {
+          batteryLevel = double.tryParse(data['level'].toString()) ?? 0;
+          isCharging = data['isCharging'] == true;
+        });
+      }
+    });
+  }
+
+  void _showCardNamingDialog(BuildContext context) {
+    final cardKeys = cardNames.keys.toList();
+    final cardIds = cardStatuses.keys.toList();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Name Your Cards'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: cardNames.length,
+            itemBuilder: (context, index) {
+              final cardKey = cardKeys[index];
+              final cardId = index < cardIds.length ? cardIds[index] : 'N/A';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Card ${index + 1} (ID: $cardId)'),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        initialValue: cardNames[cardKey],
+                        onChanged: (value) => _saveCardName(cardKey, value),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final itemsIn = cardStatuses.values.where((status) => status == 'IN').length;
+    final totalItems = cardStatuses.length;
+    final missingItems = cardStatuses.entries
+        .where((entry) => entry.value == 'OUT')
+        .map((entry) {
+          final index = cardStatuses.keys.toList().indexOf(entry.key);
+          return index < cardNames.length ? cardNames.values.elementAt(index) : 'Card ${index + 1}';
+        })
+        .join(', ');
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -59,15 +194,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
         iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: RefreshIndicator(
-        onRefresh: fetchData,
+        onRefresh: () async {
+          // Force refresh if needed
+          final pressure = await _firebaseService.getPressureData();
+          final cards = await _firebaseService.getCardsData();
+          final battery = await _firebaseService.getBatteryData();
+          
+          setState(() {
+            sensor1 = double.tryParse(pressure['sensor1'].toString()) ?? 0;
+            sensor2 = double.tryParse(pressure['sensor2'].toString()) ?? 0;
+            net = double.tryParse(pressure['net'].toString()) ?? 0;
+            cardStatuses = Map<String, String>.from(cards.map((key, value) => 
+              MapEntry(key.toString(), value['status'].toString())));
+            batteryLevel = double.tryParse(battery['level'].toString()) ?? 0;
+            isCharging = battery['isCharging'] == true;
+          });
+        },
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const BatteryIndicator(batteryLevel: 0.76),
+              BatteryIndicator(
+                batteryLevel: batteryLevel,
+                isCharging: isCharging,
+              ),
               const SizedBox(height: 20),
 
-              /// ✅ Left & Right Pressure Indicators (Before Backpack)
+              /// Left & Right Pressure Indicators (Before Backpack)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -78,12 +231,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 20),
 
-              /// ✅ Backpack Overview
+              /// Backpack Overview
               BagOverviewCard(orientation: orientation),
 
               const SizedBox(height: 20),
 
-              /// ✅ Smart Backpack Status Details
+              /// Smart Backpack Status Details
               GridView.count(
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
@@ -91,11 +244,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 children: [
-                  const InfoCard(
-                    title: 'Items Detected',
-                    icon: Icons.inventory_2,
-                    value: '4',
-                    iconColor: Colors.orange,
+                  Stack(
+                    children: [
+                      InfoCard(
+                        title: 'Items Detected',
+                        icon: Icons.inventory_2,
+                        value: '$itemsIn/$totalItems',
+                        iconColor: Colors.orange,
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          onPressed: () => _showCardNamingDialog(context),
+                        ),
+                      ),
+                      if (missingItems.isNotEmpty)
+                        Positioned(
+                          bottom: 8,
+                          left: 8,
+                          right: 8,
+                          child: Text(
+                            'Missing: $missingItems',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
                   ),
                   const InfoCard(
                     title: 'Temperature',
@@ -106,7 +285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const InfoCard(
                     title: 'Last Sync',
                     icon: Icons.update,
-                    value: '5 min ago',
+                    value: 'Just now',
                     iconColor: Colors.blue,
                   ),
                   BlinkingCard(
@@ -121,37 +300,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 20),
 
-              /// ✅ Inside Bag Pressure Widget (Styled like Net Weight UI)
+              /// Inside Bag Pressure Widget
               GestureDetector(
                 onTap: () async {
                   final adjustedPressure = await showDialog(
                     context: context,
-                    builder:
-                        (context) => PressureAdjustmentPopup(
-                          initialPressure: net,
-                          onPressureChanged: (newPressure) {
-                            setState(() {
-                              net =
-                                  newPressure; // ✅ Ensure real-time updates sync with popup
-                            });
-                          },
-                        ),
+                    builder: (context) => PressureAdjustmentPopup(
+                      initialPressure: net,
+                      onPressureChanged: (newPressure) {
+                        setState(() {
+                          net = newPressure;
+                        });
+                      },
+                    ),
                   );
 
                   if (adjustedPressure != null) {
                     setState(() {
-                      net = adjustedPressure; // ✅ Final state update when saved
+                      net = adjustedPressure;
                     });
                   }
                 },
                 child: InsideBagPressureWidget(
                   insidePressure: net,
-                ), // ✅ Ensure correct widget name
+                ),
               ),
 
               const SizedBox(height: 20),
 
-              /// ✅ Net Weight Display (Styled Like InsideBagPressureWidget)
+              /// Net Weight Display
               NetWeightWidget(netWeight: net),
             ],
           ),
@@ -163,7 +340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class LeftPressureIndicator extends StatelessWidget {
   final double sensor1;
-  final String imagePath = "assests/left_side.png"; // ✅ Single image
+  final String imagePath = "assests/left_side.png";
 
   const LeftPressureIndicator({super.key, required this.sensor1});
 
@@ -172,10 +349,7 @@ class LeftPressureIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:
-            sensor1 > 5
-                ? Colors.red.withOpacity(0.3)
-                : Colors.transparent, // ✅ Dynamic warning background
+        color: sensor1 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -184,17 +358,14 @@ class LeftPressureIndicator extends StatelessWidget {
             imagePath,
             width: 80,
             height: 80,
-          ), // ✅ Always use same image
+          ),
           const SizedBox(height: 6),
           Text(
             "$sensor1 kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color:
-                  sensor1 > 5
-                      ? Colors.red
-                      : Colors.black, // ✅ Dynamic text color
+              color: sensor1 > 5 ? Colors.red : Colors.black,
             ),
           ),
         ],
@@ -205,7 +376,7 @@ class LeftPressureIndicator extends StatelessWidget {
 
 class RightPressureIndicator extends StatelessWidget {
   final double sensor2;
-  final String imagePath = "assests/right_side.png"; // ✅ Single image
+  final String imagePath = "assests/right_side.png";
 
   const RightPressureIndicator({super.key, required this.sensor2});
 
@@ -214,10 +385,7 @@ class RightPressureIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:
-            sensor2 > 5
-                ? Colors.red.withOpacity(0.3)
-                : Colors.transparent, // ✅ Dynamic warning background
+        color: sensor2 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -226,17 +394,14 @@ class RightPressureIndicator extends StatelessWidget {
             imagePath,
             width: 80,
             height: 80,
-          ), // ✅ Always use same image
+          ),
           const SizedBox(height: 6),
           Text(
             "$sensor2 kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color:
-                  sensor2 > 5
-                      ? Colors.red
-                      : Colors.black, // ✅ Dynamic text color
+              color: sensor2 > 5 ? Colors.red : Colors.black,
             ),
           ),
         ],
