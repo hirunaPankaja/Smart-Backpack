@@ -27,6 +27,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, String> cardStatuses = {};
   double batteryLevel = 0;
   bool isCharging = false;
+  bool _isOnline = true;
+  DateTime? _lastSyncTime;
 
   final FirebaseService _firebaseService = FirebaseService();
   late DatabaseReference _positionRef;
@@ -40,6 +42,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _loadCardNames();
     _setupRealTimeListeners();
+  }
+
+  String getSyncStatusText() {
+    if (_isOnline) return 'Just now';
+    if (_lastSyncTime == null) return 'Offline';
+    
+    final minutes = DateTime.now().difference(_lastSyncTime!).inMinutes;
+    return '$minutes minute${minutes == 1 ? '' : 's'} ago';
   }
 
   Future<void> _loadCardNames() async {
@@ -70,52 +80,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _batteryRef = _firebaseService.getBatteryRef();
 
     _positionRef.onValue.listen((event) {
-      final data = event.snapshot.value;
-      if (data != null) {
-        setState(() {
+      setState(() {
+        _isOnline = true;
+        _lastSyncTime = DateTime.now();
+        final data = event.snapshot.value;
+        if (data != null) {
           orientation = data.toString();
-        });
-      }
+        }
+      });
     });
 
     _waterLeakRef.onValue.listen((event) {
-      final data = event.snapshot.value;
-      if (data != null) {
-        setState(() {
+      setState(() {
+        _isOnline = true;
+        _lastSyncTime = DateTime.now();
+        final data = event.snapshot.value;
+        if (data != null) {
           isWaterLeaking = data == true;
-        });
-      }
+        }
+      });
     });
 
     _pressureRef.onValue.listen((event) {
-      final data = event.snapshot.value as Map?;
-      if (data != null) {
-        setState(() {
+      setState(() {
+        _isOnline = true;
+        _lastSyncTime = DateTime.now();
+        final data = event.snapshot.value as Map?;
+        if (data != null) {
           sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
           sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
           net = double.tryParse(data['net'].toString()) ?? 0;
-        });
-      }
+        }
+      });
     });
 
     _cardsRef.onValue.listen((event) {
-      final data = event.snapshot.value as Map?;
-      if (data != null) {
-        setState(() {
+      setState(() {
+        _isOnline = true;
+        _lastSyncTime = DateTime.now();
+        final data = event.snapshot.value as Map?;
+        if (data != null) {
           cardStatuses = Map<String, String>.from(data.map((key, value) => 
             MapEntry(key.toString(), (value as Map)['status'].toString())));
-        });
-      }
+        }
+      });
     });
 
     _batteryRef.onValue.listen((event) {
-      final data = event.snapshot.value as Map?;
-      if (data != null) {
-        setState(() {
+      setState(() {
+        _isOnline = true;
+        _lastSyncTime = DateTime.now();
+        final data = event.snapshot.value as Map?;
+        if (data != null) {
           batteryLevel = double.tryParse(data['level'].toString()) ?? 0;
           isCharging = data['isCharging'] == true;
-        });
-      }
+        }
+      });
+    });
+
+    // Error listeners for offline detection
+    _positionRef.onValue.listen((event) {}, onError: (error) {
+      setState(() => _isOnline = false);
+    });
+    _waterLeakRef.onValue.listen((event) {}, onError: (error) {
+      setState(() => _isOnline = false);
+    });
+    _pressureRef.onValue.listen((event) {}, onError: (error) {
+      setState(() => _isOnline = false);
+    });
+    _cardsRef.onValue.listen((event) {}, onError: (error) {
+      setState(() => _isOnline = false);
+    });
+    _batteryRef.onValue.listen((event) {}, onError: (error) {
+      setState(() => _isOnline = false);
     });
   }
 
@@ -179,7 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final index = cardStatuses.keys.toList().indexOf(entry.key);
           return index < cardNames.length ? cardNames.values.elementAt(index) : 'Card ${index + 1}';
         })
-        .join(', ');
+        .toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -201,6 +238,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final battery = await _firebaseService.getBatteryData();
           
           setState(() {
+            _isOnline = true;
+            _lastSyncTime = DateTime.now();
             sensor1 = double.tryParse(pressure['sensor1'].toString()) ?? 0;
             sensor2 = double.tryParse(pressure['sensor2'].toString()) ?? 0;
             net = double.tryParse(pressure['net'].toString()) ?? 0;
@@ -260,20 +299,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onPressed: () => _showCardNamingDialog(context),
                         ),
                       ),
-                      if (missingItems.isNotEmpty)
-                        Positioned(
-                          bottom: 8,
-                          left: 8,
-                          right: 8,
-                          child: Text(
-                            'Missing: $missingItems',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.red,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
                     ],
                   ),
                   const InfoCard(
@@ -282,10 +307,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: '32°C',
                     iconColor: Colors.redAccent,
                   ),
-                  const InfoCard(
+                  InfoCard(
                     title: 'Last Sync',
                     icon: Icons.update,
-                    value: 'Just now',
+                    value: getSyncStatusText(),
                     iconColor: Colors.blue,
                   ),
                   BlinkingCard(
@@ -297,6 +322,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 20),
+
+              /// Missing Items Display
+              if (missingItems.isNotEmpty)
+                Column(
+                  children: missingItems.map((itemName) => Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$itemName is missing',
+                      style: TextStyle(
+                        color: Colors.red[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )).toList(),
+                ),
 
               const SizedBox(height: 20),
 

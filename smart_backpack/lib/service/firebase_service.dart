@@ -40,6 +40,7 @@ class FirebaseService {
 
     return Map<String, dynamic>.from(data);
   }
+  
 
   Future<Map<String, dynamic>> getBatteryData() async {
     final snapshot = await _dbRef.child('battery').get();
