@@ -34,7 +34,7 @@ The **Smart Backpack** is an innovative IoT-based system designed for students, 
 - **YL-83** – Soil/moisture sensor (used for water leak detection)  
 - **RFID Module** + **RFID Tags** – For item tracking  
 - **50Kg Load Cell** + **HX711** – For accurate weight measurement  
-- **7.2V Battery Pack** – Power supply  
+- **3.7v Lipo Battery** – Power supply  
 
 ---
 
