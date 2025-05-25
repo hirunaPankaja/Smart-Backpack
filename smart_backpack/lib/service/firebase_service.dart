@@ -9,6 +9,8 @@ class FirebaseService {
   DatabaseReference getPressureRef() => _dbRef.child('pressure');
   DatabaseReference getCardsRef() => _dbRef.child('cards');
   DatabaseReference getBatteryRef() => _dbRef.child('battery');
+  DatabaseReference getBagPositionRef() => _dbRef.child('neo6m');
+
 
   // One-time fetch methods
   Future<String> getBackpackPosition() async {
@@ -51,5 +53,19 @@ class FirebaseService {
       'level': data['level'] ?? 0,
       'isCharging': data['isCharging'] ?? false,
     };
+  }
+  Stream<Map<String, double>?> bagPositionStream() {
+    return getBagPositionRef().onValue.map((event) {
+      final data = event.snapshot.value as Map?;
+      if (data == null) return null;
+
+      final latitude = double.tryParse(data['latitude'].toString());
+      final longitude = double.tryParse(data['longitude'].toString());
+
+      if (latitude != null && longitude != null) {
+        return {'latitude': latitude, 'longitude': longitude};
+      }
+      return null;
+    });
   }
 }
