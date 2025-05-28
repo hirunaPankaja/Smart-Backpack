@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
-import 'screen/map_scrren.dart';
+import 'screen/dashboard_screen.dart'; // ✅ Import the DashboardScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart Backpack',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
-      home: const MapScreen(),
+      home: const DashboardScreen(), // ✅ Corrected to load DashboardScreen
     );
   }
 }

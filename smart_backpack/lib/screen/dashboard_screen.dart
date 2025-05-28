@@ -9,6 +9,7 @@ import '../widget/info_card.dart';
 import '../dialogs/pressure_adjustment_popup.dart';
 import '../widget/InsideBagPressure.dart';
 import '../widget/net_weight_widget.dart';
+import '../widget/temperature_humidity_widget.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,6 +30,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isCharging = false;
   bool _isOnline = true;
   DateTime? _lastSyncTime;
+  double temperature = 0.0;
+  double humidity = 0.0;
 
   final FirebaseService _firebaseService = FirebaseService();
   late DatabaseReference _positionRef;
@@ -36,6 +39,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late DatabaseReference _pressureRef;
   late DatabaseReference _cardsRef;
   late DatabaseReference _batteryRef;
+  late DatabaseReference _temperatureRef;
+  late DatabaseReference _humidityRef;
 
   @override
   void initState() {
@@ -47,7 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String getSyncStatusText() {
     if (_isOnline) return 'Just now';
     if (_lastSyncTime == null) return 'Offline';
-    
+
     final minutes = DateTime.now().difference(_lastSyncTime!).inMinutes;
     return '$minutes minute${minutes == 1 ? '' : 's'} ago';
   }
@@ -78,6 +83,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _pressureRef = _firebaseService.getPressureRef();
     _cardsRef = _firebaseService.getCardsRef();
     _batteryRef = _firebaseService.getBatteryRef();
+    _temperatureRef =
+        _firebaseService.getTemperatureRef(); // ✅ Ensure this is set first
+    _humidityRef = _firebaseService.getHumidityRef();
 
     _positionRef.onValue.listen((event) {
       setState(() {
@@ -120,8 +128,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value as Map?;
         if (data != null) {
-          cardStatuses = Map<String, String>.from(data.map((key, value) => 
-            MapEntry(key.toString(), (value as Map)['status'].toString())));
+          cardStatuses = Map<String, String>.from(
+            data.map(
+              (key, value) =>
+                  MapEntry(key.toString(), (value as Map)['status'].toString()),
+            ),
+          );
+        }
+      });
+    });
+
+    _temperatureRef.onValue.listen((event) {
+      setState(() {
+        final data = event.snapshot.value;
+        if (data != null) {
+          temperature = double.tryParse(data.toString()) ?? 0.0;
+        }
+      });
+    });
+
+    _humidityRef.onValue.listen((event) {
+      setState(() {
+        final data = event.snapshot.value;
+        if (data != null) {
+          humidity = double.tryParse(data.toString()) ?? 0.0;
         }
       });
     });
@@ -139,84 +169,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     // Error listeners for offline detection
-    _positionRef.onValue.listen((event) {}, onError: (error) {
-      setState(() => _isOnline = false);
-    });
-    _waterLeakRef.onValue.listen((event) {}, onError: (error) {
-      setState(() => _isOnline = false);
-    });
-    _pressureRef.onValue.listen((event) {}, onError: (error) {
-      setState(() => _isOnline = false);
-    });
-    _cardsRef.onValue.listen((event) {}, onError: (error) {
-      setState(() => _isOnline = false);
-    });
-    _batteryRef.onValue.listen((event) {}, onError: (error) {
-      setState(() => _isOnline = false);
-    });
+    _positionRef.onValue.listen(
+      (event) {},
+      onError: (error) {
+        setState(() => _isOnline = false);
+      },
+    );
+    _waterLeakRef.onValue.listen(
+      (event) {},
+      onError: (error) {
+        setState(() => _isOnline = false);
+      },
+    );
+    _pressureRef.onValue.listen(
+      (event) {},
+      onError: (error) {
+        setState(() => _isOnline = false);
+      },
+    );
+    _cardsRef.onValue.listen(
+      (event) {},
+      onError: (error) {
+        setState(() => _isOnline = false);
+      },
+    );
+    _batteryRef.onValue.listen(
+      (event) {},
+      onError: (error) {
+        setState(() => _isOnline = false);
+      },
+    );
   }
 
   void _showCardNamingDialog(BuildContext context) {
     final cardKeys = cardNames.keys.toList();
     final cardIds = cardStatuses.keys.toList();
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Name Your Cards'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: cardNames.length,
-            itemBuilder: (context, index) {
-              final cardKey = cardKeys[index];
-              final cardId = index < cardIds.length ? cardIds[index] : 'N/A';
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text('Card ${index + 1} (ID: $cardId)'),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: TextFormField(
-                        initialValue: cardNames[cardKey],
-                        onChanged: (value) => _saveCardName(cardKey, value),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Name Your Cards'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: cardNames.length,
+                itemBuilder: (context, index) {
+                  final cardKey = cardKeys[index];
+                  final cardId =
+                      index < cardIds.length ? cardIds[index] : 'N/A';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('Card ${index + 1} (ID: $cardId)'),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            initialValue: cardNames[cardKey],
+                            onChanged: (value) => _saveCardName(cardKey, value),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final itemsIn = cardStatuses.values.where((status) => status == 'IN').length;
+    final itemsIn =
+        cardStatuses.values.where((status) => status == 'IN').length;
     final totalItems = cardStatuses.length;
-    final missingItems = cardStatuses.entries
-        .where((entry) => entry.value == 'OUT')
-        .map((entry) {
+    final missingItems =
+        cardStatuses.entries.where((entry) => entry.value == 'OUT').map((
+          entry,
+        ) {
           final index = cardStatuses.keys.toList().indexOf(entry.key);
-          return index < cardNames.length ? cardNames.values.elementAt(index) : 'Card ${index + 1}';
-        })
-        .toList();
+          return index < cardNames.length
+              ? cardNames.values.elementAt(index)
+              : 'Card ${index + 1}';
+        }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -236,15 +286,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final pressure = await _firebaseService.getPressureData();
           final cards = await _firebaseService.getCardsData();
           final battery = await _firebaseService.getBatteryData();
-          
+
           setState(() {
             _isOnline = true;
             _lastSyncTime = DateTime.now();
             sensor1 = double.tryParse(pressure['sensor1'].toString()) ?? 0;
             sensor2 = double.tryParse(pressure['sensor2'].toString()) ?? 0;
             net = double.tryParse(pressure['net'].toString()) ?? 0;
-            cardStatuses = Map<String, String>.from(cards.map((key, value) => 
-              MapEntry(key.toString(), value['status'].toString())));
+            cardStatuses = Map<String, String>.from(
+              cards.map(
+                (key, value) =>
+                    MapEntry(key.toString(), value['status'].toString()),
+              ),
+            );
             batteryLevel = double.tryParse(battery['level'].toString()) ?? 0;
             isCharging = battery['isCharging'] == true;
           });
@@ -253,6 +307,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              TemperatureHumidityWidget(
+                onDataReceived: (temp, hum) {
+                  setState(() {
+                    temperature = temp;
+                    humidity = hum;
+                  });
+                },
+              ),
               BatteryIndicator(
                 batteryLevel: batteryLevel,
                 isCharging: isCharging,
@@ -301,12 +363,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
-                  const InfoCard(
-                    title: 'Temperature',
+
+                  InfoCard(
+                    title: 'Temperature & Humidity',
                     icon: Icons.thermostat,
-                    value: '32°C',
-                    iconColor: Colors.redAccent,
+                    value:
+                        '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
+                    iconColor:
+                        (temperature > 35 || humidity > 80)
+                            ? Colors.redAccent
+                            : Colors.blueAccent,
+                    cardColor:
+                        (temperature > 35 && humidity > 80)
+                            ? Colors.red.withOpacity(
+                              0.2,
+                            ) // 🔴 Critical condition
+                            : (temperature > 35 || humidity > 80)
+                            ? Colors.orange.withOpacity(
+                              0.2,
+                            ) // 🟠 Moderate alert
+                            : Colors.white, // ✅ Normal condition
                   ),
+
                   InfoCard(
                     title: 'Last Sync',
                     icon: Icons.update,
@@ -328,22 +406,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
               /// Missing Items Display
               if (missingItems.isNotEmpty)
                 Column(
-                  children: missingItems.map((itemName) => Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$itemName is missing',
-                      style: TextStyle(
-                        color: Colors.red[800],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )).toList(),
+                  children:
+                      missingItems
+                          .map(
+                            (itemName) => Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$itemName is missing',
+                                style: TextStyle(
+                                  color: Colors.red[800],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                 ),
 
               const SizedBox(height: 20),
@@ -353,14 +436,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () async {
                   final adjustedPressure = await showDialog(
                     context: context,
-                    builder: (context) => PressureAdjustmentPopup(
-                      initialPressure: net,
-                      onPressureChanged: (newPressure) {
-                        setState(() {
-                          net = newPressure;
-                        });
-                      },
-                    ),
+                    builder:
+                        (context) => PressureAdjustmentPopup(
+                          initialPressure: net,
+                          onPressureChanged: (newPressure) {
+                            setState(() {
+                              net = newPressure;
+                            });
+                          },
+                        ),
                   );
 
                   if (adjustedPressure != null) {
@@ -369,9 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     });
                   }
                 },
-                child: InsideBagPressureWidget(
-                  insidePressure: net,
-                ),
+                child: InsideBagPressureWidget(insidePressure: net),
               ),
 
               const SizedBox(height: 20),
@@ -402,11 +484,7 @@ class LeftPressureIndicator extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Image.asset(
-            imagePath,
-            width: 80,
-            height: 80,
-          ),
+          Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
             "$sensor1 kg",
@@ -438,11 +516,7 @@ class RightPressureIndicator extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Image.asset(
-            imagePath,
-            width: 80,
-            height: 80,
-          ),
+          Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
             "$sensor2 kg",
