@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_backpack/widget/MapNavigationWidget.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
@@ -10,6 +11,7 @@ import '../dialogs/pressure_adjustment_popup.dart';
 import '../widget/InsideBagPressure.dart';
 import '../widget/net_weight_widget.dart';
 import '../widget/temperature_humidity_widget.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -365,18 +367,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
 
-               InfoCard(
-                title: 'Temperature & Humidity',
-                icon: Icons.thermostat,
-                value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
-                iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
-                cardColor: (temperature > 35 && humidity > 80)
-                 ? const Color.fromARGB(255, 245, 48, 34).withOpacity(0.2)
-                 : (temperature > 35 || humidity > 80)
-                 ? const Color.fromARGB(255, 235, 36, 36).withOpacity(0.2)
-                 : Colors.white,
-                 textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black), // ✅ Smaller text
-                 ),
+              InfoCard(
+                 title: 'Temperature & Humidity',
+                 icon: Icons.thermostat,
+                 value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
+                 iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
+                 cardColor: (temperature > 35 || humidity > 80) 
+                  ? const Color.fromARGB(255, 231, 3, 3)!.withOpacity(0.4) // ✅ Stronger red alert when high values are detected
+                  : Colors.white, // ✅ Normal condition (white background)
+                 textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
+                ),
 
                   InfoCard(
                     title: 'Last Sync',
@@ -454,6 +454,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               /// Net Weight Display
               NetWeightWidget(netWeight: net),
+
+              const SizedBox(height: 20),
+
+              const MapNavigationWidget(),
 
               const SizedBox(height: 20),
 

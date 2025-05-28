@@ -1,8 +1,8 @@
-// lib/screens/map_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../service/firebase_service.dart';
 
@@ -13,13 +13,15 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final Completer<GoogleMapController> _controller = Completer();
   final FirebaseService _firebaseService = FirebaseService();
   LatLng? _currentPosition;
   LatLng? _bagPosition;
-  Circle? _circle;
-  static const double safeRadius = 30;
+  String _bagLocationName = "Unknown Location";
+
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   StreamSubscription<Map<String, double>?>? _bagStreamSub;
 
@@ -28,11 +30,18 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _loadCurrentLocation();
     _listenToBagPosition();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
   }
 
   @override
   void dispose() {
     _bagStreamSub?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -43,14 +52,6 @@ class _MapScreenState extends State<MapScreen> {
     final position = await Geolocator.getCurrentPosition();
     setState(() {
       _currentPosition = LatLng(position.latitude, position.longitude);
-      _circle = Circle(
-        circleId: const CircleId('safe_zone'),
-        center: _currentPosition!,
-        radius: safeRadius,
-        fillColor: Colors.green.withOpacity(0.2),
-        strokeColor: Colors.green,
-        strokeWidth: 2,
-      );
     });
   }
 
@@ -72,30 +73,30 @@ class _MapScreenState extends State<MapScreen> {
     return true;
   }
 
+  Future<String> _getPlaceName(LatLng position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        return "${placemarks.first.locality}, ${placemarks.first.country}";
+      }
+    } catch (e) {
+      print("Error fetching place name: $e");
+    }
+    return "Unknown Location";
+  }
+
   void _listenToBagPosition() {
-    _bagStreamSub = _firebaseService.bagPositionStream().listen((data) {
+    _bagStreamSub = _firebaseService.bagPositionStream().listen((data) async {
       if (data != null) {
+        LatLng newPosition = LatLng(data['latitude']!, data['longitude']!);
+        String placeName = await _getPlaceName(newPosition);
         setState(() {
-          _bagPosition = LatLng(data['latitude']!, data['longitude']!);
+          _bagPosition = newPosition;
+          _bagLocationName = placeName;
+          _animationController.forward();
         });
       }
     });
-  }
-
-  bool isBagInSafeZone() {
-    if (_bagPosition == null || _currentPosition == null) return false;
-    final distance = Geolocator.distanceBetween(
-      _currentPosition!.latitude,
-      _currentPosition!.longitude,
-      _bagPosition!.latitude,
-      _bagPosition!.longitude,
-    );
-    return distance <= safeRadius;
-  }
-
-  String getStatusText() {
-    if (_bagPosition == null) return "Bag location not found.";
-    return isBagInSafeZone() ? "🎒 Bag is with you (within safe zone)." : "⚠️ Bag is misplaced! Tap to locate.";
   }
 
   Set<Marker> _buildMarkers() {
@@ -113,7 +114,7 @@ class _MapScreenState extends State<MapScreen> {
         markerId: const MarkerId('bag'),
         position: _bagPosition!,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: const InfoWindow(title: "Bag"),
+        infoWindow: InfoWindow(title: _bagLocationName),
       ));
     }
     return markers;
@@ -131,47 +132,55 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: ClipOval(
-              child: _currentPosition == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: _currentPosition!,
-                        zoom: 18,
-                      ),
-                      markers: _buildMarkers(),
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                      circles: _circle != null ? {_circle!} : {},
-                      onMapCreated: (controller) => _controller.complete(controller),
+            child: _currentPosition == null
+                ? const Center(child: CircularProgressIndicator())
+                : GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: _currentPosition!,
+                      zoom: 18,
                     ),
-            ),
+                    markers: _buildMarkers(),
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: true,
+                    onMapCreated: (controller) => _controller.complete(controller),
+                  ),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(getStatusText(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 10),
-                  if (_bagPosition != null && !isBagInSafeZone())
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.directions),
-                      label: const Text("Navigate to Bag"),
-                      onPressed: () async {
-                        final controller = await _controller.future;
-                        controller.animateCamera(CameraUpdate.newLatLng(_bagPosition!));
-                      },
+          FadeTransition(
+            opacity: _fadeAnimation,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _bagPosition == null ? "Bag location not found." : "🎒 Bag is at $_bagLocationName",
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                     ),
-                ],
+                    const SizedBox(height: 10),
+                    if (_bagPosition != null)
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.directions),
+                        label: const Text("Navigate to Bag"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () async {
+                          final controller = await _controller.future;
+                          controller.animateCamera(CameraUpdate.newLatLng(_bagPosition!));
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

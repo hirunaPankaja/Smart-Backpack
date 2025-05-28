@@ -9,7 +9,7 @@ class FirebaseService {
   DatabaseReference getPressureRef() => _dbRef.child('pressure');
   DatabaseReference getCardsRef() => _dbRef.child('cards');
   DatabaseReference getBatteryRef() => _dbRef.child('battery');
-  DatabaseReference getBagPositionRef() => _dbRef.child('neo6m');
+  DatabaseReference getBagPositionRef() => _dbRef.child('gps');
   DatabaseReference getTemperatureRef() => _dbRef.child('sensorData/temperature'); // ✅ Corrected path
   DatabaseReference getHumidityRef() => _dbRef.child('sensorData/humidity'); // ✅ Added humidity reference
 

@@ -15,7 +15,7 @@ class NetWeightWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: netWeight > 8 ? Colors.redAccent.withOpacity(0.5) : Colors.grey.shade200,
+            color: netWeight > 8 ? Colors.redAccent.withOpacity(0.2) : Colors.grey.shade200,
             blurRadius: netWeight > 8 ? 10 : 6,
             spreadRadius: netWeight > 8 ? 4 : 1,
           ),
