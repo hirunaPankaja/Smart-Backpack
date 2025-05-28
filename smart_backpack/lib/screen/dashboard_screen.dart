@@ -352,6 +352,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         icon: Icons.inventory_2,
                         value: '$itemsIn/$totalItems',
                         iconColor: Colors.orange,
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                       ),
                       Positioned(
                         top: 8,
@@ -364,32 +365,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
 
-                  InfoCard(
-                    title: 'Temperature & Humidity',
-                    icon: Icons.thermostat,
-                    value:
-                        '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
-                    iconColor:
-                        (temperature > 35 || humidity > 80)
-                            ? Colors.redAccent
-                            : Colors.blueAccent,
-                    cardColor:
-                        (temperature > 35 && humidity > 80)
-                            ? Colors.red.withOpacity(
-                              0.2,
-                            ) // 🔴 Critical condition
-                            : (temperature > 35 || humidity > 80)
-                            ? Colors.orange.withOpacity(
-                              0.2,
-                            ) // 🟠 Moderate alert
-                            : Colors.white, // ✅ Normal condition
-                  ),
+               InfoCard(
+                title: 'Temperature & Humidity',
+                icon: Icons.thermostat,
+                value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
+                iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
+                cardColor: (temperature > 35 && humidity > 80)
+                 ? const Color.fromARGB(255, 245, 48, 34).withOpacity(0.2)
+                 : (temperature > 35 || humidity > 80)
+                 ? const Color.fromARGB(255, 235, 36, 36).withOpacity(0.2)
+                 : Colors.white,
+                 textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black), // ✅ Smaller text
+                 ),
 
                   InfoCard(
                     title: 'Last Sync',
                     icon: Icons.update,
                     value: getSyncStatusText(),
                     iconColor: Colors.blue,
+                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
                   BlinkingCard(
                     title: 'Water Detect',
@@ -460,6 +454,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               /// Net Weight Display
               NetWeightWidget(netWeight: net),
+
+              const SizedBox(height: 20),
+
+           
             ],
           ),
         ),
