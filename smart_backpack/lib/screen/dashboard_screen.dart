@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:smart_backpack/widget/MapNavigationWidget.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
@@ -12,7 +13,6 @@ import '../widget/InsideBagPressure.dart';
 import '../widget/net_weight_widget.dart';
 import '../widget/temperature_humidity_widget.dart';
 
-
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -23,11 +23,14 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   String orientation = 'UNKNOWN';
   bool isWaterLeaking = false;
+  bool _waterLeakNotified = false;
   double sensor1 = 0;
   double sensor2 = 0;
   double net = 0;
+  bool _overweightNotified = false;
   Map<String, String> cardNames = {};
   Map<String, String> cardStatuses = {};
+  Set<String> _missingCardNotified = {};
   double batteryLevel = 0;
   bool isCharging = false;
   bool _isOnline = true;
@@ -44,11 +47,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late DatabaseReference _temperatureRef;
   late DatabaseReference _humidityRef;
 
+  // Notification setup
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
   @override
   void initState() {
     super.initState();
+    _initializeNotifications();
     _loadCardNames();
     _setupRealTimeListeners();
+  }
+
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _showNotification(
+      String title, String body, String channelId, String channelName) async {
+    const AndroidNotificationDetails androidNotificationDetails =
+        AndroidNotificationDetails(
+      'smart_backpack_alerts',
+      'Smart Backpack Alerts',
+      channelDescription: 'Alerts from your Smart Backpack',
+      importance: Importance.high,
+      priority: Priority.high,
+      ticker: 'ticker',
+      sound: RawResourceAndroidNotificationSound('notification'),
+      playSound: true,
+    );
+
+    const NotificationDetails notificationDetails =
+        NotificationDetails(android: androidNotificationDetails);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      notificationDetails,
+    );
   }
 
   String getSyncStatusText() {
@@ -85,8 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _pressureRef = _firebaseService.getPressureRef();
     _cardsRef = _firebaseService.getCardsRef();
     _batteryRef = _firebaseService.getBatteryRef();
-    _temperatureRef =
-        _firebaseService.getTemperatureRef(); // ✅ Ensure this is set first
+    _temperatureRef = _firebaseService.getTemperatureRef();
     _humidityRef = _firebaseService.getHumidityRef();
 
     _positionRef.onValue.listen((event) {
@@ -106,7 +150,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value;
         if (data != null) {
-          isWaterLeaking = data == true;
+          final newLeakStatus = data == true;
+          if (newLeakStatus && !_waterLeakNotified) {
+            _showNotification(
+              'Water Leak Detected!',
+              'Your backpack has detected water leakage. Check immediately!',
+              'water_leak_channel',
+              'Water Leak Alerts',
+            );
+            _waterLeakNotified = true;
+          } else if (!newLeakStatus) {
+            _waterLeakNotified = false;
+          }
+          isWaterLeaking = newLeakStatus;
         }
       });
     });
@@ -120,6 +176,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
           sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
           net = double.tryParse(data['net'].toString()) ?? 0;
+
+          // Check for overweight condition (assuming threshold is 5kg)
+          if ((sensor1 > 5 || sensor2 > 5) && !_overweightNotified) {
+            _showNotification(
+              'Overweight Alert!',
+              'Your backpack might be too heavy. One side has ${sensor1 > 5 ? sensor1 : sensor2} kg.',
+              'overweight_channel',
+              'Overweight Alerts',
+            );
+            _overweightNotified = true;
+          } else if (sensor1 <= 5 && sensor2 <= 5) {
+            _overweightNotified = false;
+          }
         }
       });
     });
@@ -130,12 +199,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value as Map?;
         if (data != null) {
-          cardStatuses = Map<String, String>.from(
+          final newCardStatuses = Map<String, String>.from(
             data.map(
               (key, value) =>
                   MapEntry(key.toString(), (value as Map)['status'].toString()),
             ),
           );
+
+          // Check for missing cards
+          final missingCards = newCardStatuses.entries
+              .where((entry) => entry.value == 'OUT')
+              .map((entry) => entry.key)
+              .toSet();
+
+          // Notify for newly missing cards
+          for (final cardId in missingCards) {
+            if (!_missingCardNotified.contains(cardId)) {
+              final cardName = cardNames['card${cardId.split('card').last}'] ??
+                  'Card ${cardId.split('card').last}';
+              _showNotification(
+                'Item Missing!',
+                '$cardName is not detected in your backpack.',
+                'missing_item_channel',
+                'Missing Item Alerts',
+              );
+              _missingCardNotified.add(cardId);
+            }
+          }
+
+          // Remove returned cards from notification tracking
+          _missingCardNotified.removeWhere((cardId) =>
+              !missingCards.contains(cardId) ||
+              newCardStatuses[cardId] == 'IN');
+
+          cardStatuses = newCardStatuses;
         }
       });
     });
@@ -209,66 +306,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Name Your Cards'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: cardNames.length,
-                itemBuilder: (context, index) {
-                  final cardKey = cardKeys[index];
-                  final cardId =
-                      index < cardIds.length ? cardIds[index] : 'N/A';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text('Card ${index + 1} (ID: $cardId)'),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            initialValue: cardNames[cardKey],
-                            onChanged: (value) => _saveCardName(cardKey, value),
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
+      builder: (context) => AlertDialog(
+        title: const Text('Name Your Cards'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: cardNames.length,
+            itemBuilder: (context, index) {
+              final cardKey = cardKeys[index];
+              final cardId = index < cardIds.length ? cardIds[index] : 'N/A';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Card ${index + 1} (ID: $cardId)'),
                     ),
-                  );
-                },
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
-              ),
-            ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        initialValue: cardNames[cardKey],
+                        onChanged: (value) => _saveCardName(cardKey, value),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final itemsIn =
-        cardStatuses.values.where((status) => status == 'IN').length;
+    final itemsIn = cardStatuses.values.where((status) => status == 'IN').length;
     final totalItems = cardStatuses.length;
-    final missingItems =
-        cardStatuses.entries.where((entry) => entry.value == 'OUT').map((
-          entry,
-        ) {
-          final index = cardStatuses.keys.toList().indexOf(entry.key);
-          return index < cardNames.length
-              ? cardNames.values.elementAt(index)
-              : 'Card ${index + 1}';
-        }).toList();
+    final missingItems = cardStatuses.entries.where((entry) => entry.value == 'OUT').map((entry) {
+      final index = cardStatuses.keys.toList().indexOf(entry.key);
+      return index < cardNames.length
+          ? cardNames.values.elementAt(index)
+          : 'Card ${index + 1}';
+    }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -367,16 +458,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
 
-              InfoCard(
-                 title: 'Temperature & Humidity',
-                 icon: Icons.thermostat,
-                 value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
-                 iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
-                 cardColor: (temperature > 35 || humidity > 80) 
-                  ? const Color.fromARGB(255, 231, 3, 3)!.withOpacity(0.4) // ✅ Stronger red alert when high values are detected
-                  : Colors.white, // ✅ Normal condition (white background)
-                 textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
-                ),
+                  InfoCard(
+                    title: 'Temperature & Humidity',
+                    icon: Icons.thermostat,
+                    value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
+                    iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
+                    cardColor: (temperature > 35 || humidity > 80) 
+                      ? const Color.fromARGB(255, 231, 3, 3).withOpacity(0.4)
+                      : Colors.white,
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
 
                   InfoCard(
                     title: 'Last Sync',
@@ -400,27 +491,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               /// Missing Items Display
               if (missingItems.isNotEmpty)
                 Column(
-                  children:
-                      missingItems
-                          .map(
-                            (itemName) => Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red[100],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '$itemName is missing',
-                                style: TextStyle(
-                                  color: Colors.red[800],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                  children: missingItems
+                      .map(
+                        (itemName) => Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$itemName is missing',
+                            style: TextStyle(
+                              color: Colors.red[800],
+                              fontWeight: FontWeight.bold,
                             ),
-                          )
-                          .toList(),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
 
               const SizedBox(height: 20),
@@ -430,15 +520,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () async {
                   final adjustedPressure = await showDialog(
                     context: context,
-                    builder:
-                        (context) => PressureAdjustmentPopup(
-                          initialPressure: net,
-                          onPressureChanged: (newPressure) {
-                            setState(() {
-                              net = newPressure;
-                            });
-                          },
-                        ),
+                    builder: (context) => PressureAdjustmentPopup(
+                      initialPressure: net,
+                      onPressureChanged: (newPressure) {
+                        setState(() {
+                          net = newPressure;
+                        });
+                      },
+                    ),
                   );
 
                   if (adjustedPressure != null) {
@@ -460,8 +549,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const MapNavigationWidget(),
 
               const SizedBox(height: 20),
-
-           
             ],
           ),
         ),
