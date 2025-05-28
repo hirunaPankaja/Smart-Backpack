@@ -1,79 +1,92 @@
 import 'package:flutter/material.dart';
-import 'dart:math'; // Required for rotation
-import '../service/firebase_service.dart'; // Ensure Firebase is imported
+import 'dart:math';
+import '../service/firebase_service.dart';
 
 class BagOverviewCard extends StatefulWidget {
-  final String orientation;
-
   const BagOverviewCard({super.key, required this.orientation});
+
+  final String orientation;
 
   @override
   State<BagOverviewCard> createState() => _BagOverviewCardState();
 }
 
 class _BagOverviewCardState extends State<BagOverviewCard> {
-  String orientation = 'UNKNOWN';
-  final FirebaseService _firebaseService = FirebaseService();
+  double rotationAngle = 0.0;
 
   @override
   void initState() {
     super.initState();
-    fetchOrientationData(); // Fetch rotation data from Firebase
+    rotationAngle = getRotationAngle(widget.orientation);
   }
 
-  Future<void> fetchOrientationData() async {
-    final String newOrientation = await _firebaseService.getBackpackPosition();
-    setState(() {
-      orientation = newOrientation;
-    });
+  @override
+  void didUpdateWidget(covariant BagOverviewCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orientation != widget.orientation) {
+      setState(() {
+        rotationAngle = getRotationAngle(widget.orientation);
+      });
+    }
   }
 
   double getRotationAngle(String orientation) {
     switch (orientation.toUpperCase()) {
       case 'VERTICAL':
-        return 0.0; // No rotation
+        return 0.0;
       case 'HORIZONTAL':
-        return pi / 2; // 90 degrees
+        return pi / 2;
       case 'UPSIDE_DOWN':
-        return pi; // 180 degrees
+        return pi;
       default:
-        return 0.0; // Default (no rotation)
+        return 0.0;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 6)],
-      ),
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center, // Center everything
         children: [
-          // Backpack Orientation Title (Moved Above the Image)
+          const SizedBox(height: 10), // Moves title slightly up
           const Text(
             "Backpack Orientation",
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 10), // Space before image
-
-          // Backpack Image (Bigger Size & Rotatable)
-          Center(
-            child: Transform.rotate(
-              angle: getRotationAngle(orientation),
-              child: Image.asset('assests/backpack.png', width: 80, height: 80), // Increased size
-            ),
+          const SizedBox(height: 20), // Adds space before backpack
+          // ✅ Smooth rotation with visible motion effect
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: rotationAngle, end: rotationAngle),
+            duration: const Duration(
+              milliseconds: 1200,
+            ), // ✅ Slower, smoother motion
+            curve: Curves.easeInOutQuad, // ✅ Natural easing transition
+            builder: (context, angle, child) {
+              return Transform.rotate(
+                angle: angle,
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: Image.asset(
+                    'assests/backpack.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
           ),
-          const SizedBox(height: 10), // Space between image & orientation text
 
-          // Firebase Orientation Display (Centered Below Image)
+          const SizedBox(height: 20), // Extra spacing for clarity
+
           Text(
-            orientation.toUpperCase(),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+            widget.orientation.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
           ),
         ],
       ),
