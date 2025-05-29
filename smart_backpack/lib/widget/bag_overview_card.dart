@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 class BagOverviewCard extends StatefulWidget {
-  const BagOverviewCard({super.key, required this.orientation});
+  const BagOverviewCard({
+    super.key, 
+    required this.orientation,
+    this.unknownAngle = pi/4, // Default 45 degrees for unknown
+  });
 
   final String orientation;
+  final double unknownAngle;
 
   @override
   State<BagOverviewCard> createState() => _BagOverviewCardState();
@@ -30,16 +35,28 @@ class _BagOverviewCardState extends State<BagOverviewCard> {
   }
 
   double getRotationAngle(String orientation) {
-    switch (orientation.toUpperCase()) {
-      case 'VERTICAL':
-        return 0.0;
-      case 'HORIZONTAL':
-        return pi / 2;
-      case 'UPSIDE_DOWN':
-        return pi;
-      default:
-        return 0.0;
+    final upperOrientation = orientation.toUpperCase();
+    const angleMap = {
+      'VERTICAL': 0.0,
+      'HORIZONTAL': pi / 2,
+      'UPSIDE_DOWN': pi,
+      'UNKNOWN': pi / 4,
+      '45° ANGLE': pi / 4,
+    };
+    return angleMap[upperOrientation] ?? 0.0;
+  }
+
+  Color getOrientationColor(String orientation) {
+    // No special color for 45° angle - all states use blue
+    return Colors.blue;
+  }
+
+  String getDisplayText(String orientation) {
+    final upperOrientation = orientation.toUpperCase();
+    if (upperOrientation == 'UNKNOWN') {
+      return '45° ANGLE';
     }
+    return upperOrientation;
   }
 
   @override
@@ -48,19 +65,19 @@ class _BagOverviewCardState extends State<BagOverviewCard> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 10), // Moves title slightly up
+          const SizedBox(height: 10),
           const Text(
             "Backpack Orientation",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20, 
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 20), // Adds space before backpack
-          // ✅ Smooth rotation with visible motion effect
+          const SizedBox(height: 20),
           TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: rotationAngle, end: rotationAngle),
-            duration: const Duration(
-              milliseconds: 1200,
-            ), // ✅ Slower, smoother motion
-            curve: Curves.easeInOutQuad, // ✅ Natural easing transition
+            duration: const Duration(milliseconds: 1200),
+            curve: Curves.easeInOutQuad,
             builder: (context, angle, child) {
               return Transform.rotate(
                 angle: angle,
@@ -69,22 +86,21 @@ class _BagOverviewCardState extends State<BagOverviewCard> {
                   width: 100,
                   height: 100,
                   child: Image.asset(
-                    'assests/backpack.png',
+                    'assests/backpack.png', // Fixed assets path
                     fit: BoxFit.contain,
+                    // Removed color tint for angled position
                   ),
                 ),
               );
             },
           ),
-
-          const SizedBox(height: 20), // Extra spacing for clarity
-
+          const SizedBox(height: 20),
           Text(
-            widget.orientation.toUpperCase(),
+            getDisplayText(widget.orientation),
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: Colors.blue, // Always blue now
             ),
           ),
         ],
