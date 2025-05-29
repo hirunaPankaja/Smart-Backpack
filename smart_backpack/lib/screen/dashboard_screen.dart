@@ -26,6 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isWaterLeaking = true;
   double sensor1 = 0;
   double sensor2 = 0;
+  double center = 0; // Not used in the current implementation
   double net = 0;
   Map<String, String> cardNames = {};
   Map<String, String> cardStatuses = {};
@@ -241,8 +242,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value as Map?;
         if (data != null) {
-          sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
-          sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
+          sensor1 = double.tryParse(data['left'].toString()) ?? 0;
+          sensor2 = double.tryParse(data['right'].toString()) ?? 0;
+          center = double.tryParse(data['center'].toString()) ?? 0;
           net = double.tryParse(data['net'].toString()) ?? 0;
           _checkAndTriggerNotifications();
         }
@@ -412,8 +414,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           setState(() {
             _isOnline = true;
             _lastSyncTime = DateTime.now();
-            sensor1 = double.tryParse(pressure['sensor1'].toString()) ?? 0;
-            sensor2 = double.tryParse(pressure['sensor2'].toString()) ?? 0;
+            sensor1 = double.tryParse(pressure['left'].toString()) ?? 0;
+            sensor2 = double.tryParse(pressure['right'].toString()) ?? 0;
+            center = double.tryParse(pressure['center'].toString()) ?? 0;
             net = double.tryParse(pressure['net'].toString()) ?? 0;
             cardStatuses = Map<String, String>.from(
               cards.map(
@@ -447,8 +450,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  LeftPressureIndicator(sensor1: sensor1),
-                  RightPressureIndicator(sensor2: sensor2),
+                  LeftPressureIndicator(left: sensor1),
+                  RightPressureIndicator(right: sensor2),
                 ],
               ),
 
@@ -565,7 +568,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     });
                   }
                 },
-                child: InsideBagPressureWidget(insidePressure: net),
+                child: InsideBagPressureWidget(),
+
               ),
 
               const SizedBox(height: 20),
@@ -614,17 +618,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 // Move these widget classes outside of DashboardScreen to the file scope:
 
 class LeftPressureIndicator extends StatelessWidget {
-  final double sensor1;
+  final double left;
   final String imagePath = "assests/left_side.png";
 
-  const LeftPressureIndicator({super.key, required this.sensor1});
+  const LeftPressureIndicator({super.key, required this.left});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: sensor1 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
+        color: left > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -632,11 +636,11 @@ class LeftPressureIndicator extends StatelessWidget {
           Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
-            "$sensor1 kg",
+            "$left kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: sensor1 > 5 ? Colors.red : Colors.black,
+              color: left > 5 ? Colors.red : Colors.black,
             ),
           ),
         ],
@@ -646,17 +650,17 @@ class LeftPressureIndicator extends StatelessWidget {
 }
 
 class RightPressureIndicator extends StatelessWidget {
-  final double sensor2;
+  final double right;
   final String imagePath = "assests/right_side.png";
 
-  const RightPressureIndicator({super.key, required this.sensor2});
+  const RightPressureIndicator({super.key, required this.right});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: sensor2 > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
+        color: right > 5 ? Colors.red.withOpacity(0.3) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -664,11 +668,11 @@ class RightPressureIndicator extends StatelessWidget {
           Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
-            "$sensor2 kg",
+            "$right kg",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: sensor2 > 5 ? Colors.red : Colors.black,
+              color: right > 5 ? Colors.red : Colors.black,
             ),
           ),
         ],

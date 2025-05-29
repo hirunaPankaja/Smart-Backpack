@@ -7,6 +7,8 @@ class PressureData extends HiveObject {
   @HiveField(0)
   final DateTime timestamp;
 
+
+
   @HiveField(1)
   final double left;
 
@@ -16,10 +18,12 @@ class PressureData extends HiveObject {
   @HiveField(3)
   final double net;
 
+
+
   PressureData({
     required this.timestamp,
     required this.left,
     required this.right,
-    required this.net,
+    required this.net, 
   });
 }

@@ -44,8 +44,9 @@ class FirebaseService {
     if (data == null) return {};
 
     return {
-      'sensor1': data['sensor1'] ?? 0,
-      'sensor2': data['sensor2'] ?? 0,
+      'left': data['left'] ?? 0,
+      'right': data['right'] ?? 0,
+      'center': data['center'] ?? 0,
       'net': data['net'] ?? 0,
     };
   }

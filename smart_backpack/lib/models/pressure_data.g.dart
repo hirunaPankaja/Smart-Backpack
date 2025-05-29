@@ -21,6 +21,7 @@ class PressureDataAdapter extends TypeAdapter<PressureData> {
       left: fields[1] as double,
       right: fields[2] as double,
       net: fields[3] as double,
+      
     );
   }
 
