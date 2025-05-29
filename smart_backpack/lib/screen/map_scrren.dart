@@ -25,6 +25,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   StreamSubscription<Map<String, double>?>? _bagStreamSub;
 
+  static const double safeRadius = 50.0; // Safe zone radius in meters
+
   @override
   void initState() {
     super.initState();
@@ -90,13 +92,59 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       if (data != null) {
         LatLng newPosition = LatLng(data['latitude']!, data['longitude']!);
         String placeName = await _getPlaceName(newPosition);
+        
         setState(() {
           _bagPosition = newPosition;
           _bagLocationName = placeName;
           _animationController.forward();
         });
+
+        // Check if bag is outside the safe zone
+        if (_currentPosition != null) {
+          double distance = Geolocator.distanceBetween(
+            _currentPosition!.latitude, _currentPosition!.longitude,
+            _bagPosition!.latitude, _bagPosition!.longitude,
+          );
+
+          if (distance > safeRadius) {
+            _showBagAlert(distance); // Trigger alert
+          }
+        }
       }
     });
+  }
+
+  // 🔹 Alert Function
+  void _showBagAlert(double distance) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Bag Alert 🚨"),
+        content: Text(
+          "Your bag is ${distance.toStringAsFixed(2)} meters away from the safe zone!",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔹 Build Geofence Circle
+  Set<Circle> _buildGeofence() {
+    return {
+      Circle(
+        circleId: const CircleId("safe_zone"),
+        center: _currentPosition ?? LatLng(0, 0),
+        radius: safeRadius, // Safe radius in meters
+        strokeColor: Colors.blueAccent,
+        strokeWidth: 2,
+        fillColor: Colors.blue.withOpacity(0.3), // Semi-transparent color
+      ),
+    };
   }
 
   Set<Marker> _buildMarkers() {
@@ -140,6 +188,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                       zoom: 18,
                     ),
                     markers: _buildMarkers(),
+                    circles: _buildGeofence(),  // ✅ Added safe zone circle
                     myLocationEnabled: true,
                     myLocationButtonEnabled: true,
                     onMapCreated: (controller) => _controller.complete(controller),
@@ -169,11 +218,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                       ElevatedButton.icon(
                         icon: const Icon(Icons.directions),
                         label: const Text("Navigate to Bag"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
                         onPressed: () async {
                           final controller = await _controller.future;
                           controller.animateCamera(CameraUpdate.newLatLng(_bagPosition!));
