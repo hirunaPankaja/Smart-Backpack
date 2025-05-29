@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
-import '../service/firebase_service.dart';
 
 class BagOverviewCard extends StatefulWidget {
   const BagOverviewCard({super.key, required this.orientation});

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_backpack/widget/MapNavigationWidget.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
@@ -11,7 +12,6 @@ import '../dialogs/pressure_adjustment_popup.dart';
 import '../widget/InsideBagPressure.dart';
 import '../widget/net_weight_widget.dart';
 import '../widget/temperature_humidity_widget.dart';
-
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,6 +35,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double temperature = 0.0;
   double humidity = 0.0;
 
+  // Previous state tracking for notifications
+  bool _previousWaterLeakState = false;
+  Map<String, String> _previousCardStatuses = {};
+  bool _previousOverweightState = false;
+
   final FirebaseService _firebaseService = FirebaseService();
   late DatabaseReference _positionRef;
   late DatabaseReference _waterLeakRef;
@@ -49,6 +54,125 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _loadCardNames();
     _setupRealTimeListeners();
+  }
+
+  // Show water leak notification
+  Future<void> _showWaterLeakNotification() async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 1,
+        channelKey: 'smart_backpack_alerts',
+        title: '💧 Water Leak Detected!',
+        body: 'Your smart backpack has detected a water leak. Please check immediately.',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.red,
+        backgroundColor: Colors.red,
+        category: NotificationCategory.Alarm,
+        wakeUpScreen: true,
+        fullScreenIntent: true,
+        criticalAlert: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
+    );
+  }
+
+  // Show missing card notification
+  Future<void> _showMissingCardNotification(List<String> missingCards) async {
+    String cardList = missingCards.join(', ');
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 2,
+        channelKey: 'smart_backpack_alerts',
+        title: '🎯 Items Missing!',
+        body: 'Missing items: $cardList. Don\'t forget your essentials!',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.orange,
+        backgroundColor: Colors.orange,
+        category: NotificationCategory.Reminder,
+        wakeUpScreen: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
+    );
+  }
+
+  // Show overweight notification
+  Future<void> _showOverweightNotification() async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 3,
+        channelKey: 'smart_backpack_alerts',
+        title: '⚖️ Overweight Detected!',
+        body: 'Your backpack is too heavy. Consider removing some items to avoid strain.',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.redAccent,
+        backgroundColor: Colors.redAccent,
+        category: NotificationCategory.Alarm,
+        wakeUpScreen: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
+    );
+  }
+
+  // Check and trigger notifications based on state changes
+  void _checkAndTriggerNotifications() {
+    // Water leak notification
+    if (isWaterLeaking && !_previousWaterLeakState) {
+      _showWaterLeakNotification();
+    }
+    _previousWaterLeakState = isWaterLeaking;
+
+    // Missing cards notification
+    final currentMissingCards = cardStatuses.entries
+        .where((entry) => entry.value == 'OUT')
+        .map((entry) {
+          final index = cardStatuses.keys.toList().indexOf(entry.key);
+          return index < cardNames.length
+              ? cardNames.values.elementAt(index)
+              : 'Card ${index + 1}';
+        })
+        .toList();
+
+    final previousMissingCards = _previousCardStatuses.entries
+        .where((entry) => entry.value == 'OUT')
+        .map((entry) {
+          final index = _previousCardStatuses.keys.toList().indexOf(entry.key);
+          return index < cardNames.length
+              ? cardNames.values.elementAt(index)
+              : 'Card ${index + 1}';
+        })
+        .toList();
+
+    if (currentMissingCards.isNotEmpty && 
+        (currentMissingCards.length != previousMissingCards.length ||
+         !currentMissingCards.every((card) => previousMissingCards.contains(card)))) {
+      _showMissingCardNotification(currentMissingCards);
+    }
+    _previousCardStatuses = Map.from(cardStatuses);
+
+    // Overweight notification (considering either sensor > 5kg as overweight)
+    bool currentOverweightState = sensor1 > 5 || sensor2 > 5;
+    if (currentOverweightState && !_previousOverweightState) {
+      _showOverweightNotification();
+    }
+    _previousOverweightState = currentOverweightState;
   }
 
   String getSyncStatusText() {
@@ -85,8 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _pressureRef = _firebaseService.getPressureRef();
     _cardsRef = _firebaseService.getCardsRef();
     _batteryRef = _firebaseService.getBatteryRef();
-    _temperatureRef =
-        _firebaseService.getTemperatureRef(); // ✅ Ensure this is set first
+    _temperatureRef = _firebaseService.getTemperatureRef();
     _humidityRef = _firebaseService.getHumidityRef();
 
     _positionRef.onValue.listen((event) {
@@ -107,6 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final data = event.snapshot.value;
         if (data != null) {
           isWaterLeaking = data == true;
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -120,6 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
           sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
           net = double.tryParse(data['net'].toString()) ?? 0;
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -136,6 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   MapEntry(key.toString(), (value as Map)['status'].toString()),
             ),
           );
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -209,66 +335,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Name Your Cards'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: cardNames.length,
-                itemBuilder: (context, index) {
-                  final cardKey = cardKeys[index];
-                  final cardId =
-                      index < cardIds.length ? cardIds[index] : 'N/A';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text('Card ${index + 1} (ID: $cardId)'),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            initialValue: cardNames[cardKey],
-                            onChanged: (value) => _saveCardName(cardKey, value),
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                      ],
+      builder: (context) => AlertDialog(
+        title: const Text('Name Your Cards'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: cardNames.length,
+            itemBuilder: (context, index) {
+              final cardKey = cardKeys[index];
+              final cardId = index < cardIds.length ? cardIds[index] : 'N/A';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Card ${index + 1} (ID: $cardId)'),
                     ),
-                  );
-                },
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
-              ),
-            ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        initialValue: cardNames[cardKey],
+                        onChanged: (value) => _saveCardName(cardKey, value),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final itemsIn =
-        cardStatuses.values.where((status) => status == 'IN').length;
+    final itemsIn = cardStatuses.values.where((status) => status == 'IN').length;
     final totalItems = cardStatuses.length;
-    final missingItems =
-        cardStatuses.entries.where((entry) => entry.value == 'OUT').map((
-          entry,
-        ) {
-          final index = cardStatuses.keys.toList().indexOf(entry.key);
-          return index < cardNames.length
-              ? cardNames.values.elementAt(index)
-              : 'Card ${index + 1}';
-        }).toList();
+    final missingItems = cardStatuses.entries.where((entry) => entry.value == 'OUT').map((entry) {
+      final index = cardStatuses.keys.toList().indexOf(entry.key);
+      return index < cardNames.length
+          ? cardNames.values.elementAt(index)
+          : 'Card ${index + 1}';
+    }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -367,16 +487,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
 
-              InfoCard(
-                 title: 'Temperature & Humidity',
-                 icon: Icons.thermostat,
-                 value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
-                 iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
-                 cardColor: (temperature > 35 || humidity > 80) 
-                  ? const Color.fromARGB(255, 231, 3, 3)!.withOpacity(0.4) // ✅ Stronger red alert when high values are detected
-                  : Colors.white, // ✅ Normal condition (white background)
-                 textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
-                ),
+                  InfoCard(
+                    title: 'Temperature & Humidity',
+                    icon: Icons.thermostat,
+                    value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
+                    iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
+                    cardColor: (temperature > 35 || humidity > 80) 
+                        ? const Color.fromARGB(255, 231, 3, 3).withOpacity(0.4)
+                        : Colors.white,
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
 
                   InfoCard(
                     title: 'Last Sync',
@@ -400,27 +520,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               /// Missing Items Display
               if (missingItems.isNotEmpty)
                 Column(
-                  children:
-                      missingItems
-                          .map(
-                            (itemName) => Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red[100],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '$itemName is missing',
-                                style: TextStyle(
-                                  color: Colors.red[800],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                  children: missingItems
+                      .map(
+                        (itemName) => Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$itemName is missing',
+                            style: TextStyle(
+                              color: Colors.red[800],
+                              fontWeight: FontWeight.bold,
                             ),
-                          )
-                          .toList(),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
 
               const SizedBox(height: 20),
@@ -430,15 +549,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () async {
                   final adjustedPressure = await showDialog(
                     context: context,
-                    builder:
-                        (context) => PressureAdjustmentPopup(
-                          initialPressure: net,
-                          onPressureChanged: (newPressure) {
-                            setState(() {
-                              net = newPressure;
-                            });
-                          },
-                        ),
+                    builder: (context) => PressureAdjustmentPopup(
+                      initialPressure: net,
+                      onPressureChanged: (newPressure) {
+                        setState(() {
+                          net = newPressure;
+                        });
+                      },
+                    ),
                   );
 
                   if (adjustedPressure != null) {
@@ -460,8 +578,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const MapNavigationWidget(),
 
               const SizedBox(height: 20),
-
-           
             ],
           ),
         ),
