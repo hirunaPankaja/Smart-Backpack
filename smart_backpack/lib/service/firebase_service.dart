@@ -1,7 +1,21 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:hive/hive.dart';
+import '../models/pressure_data.dart';
 
 class FirebaseService {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
+
+  // Hive box for storing pressure history
+  late final Box<PressureData> _pressureBox;
+
+  FirebaseService() {
+    _initHiveBox();
+  }
+
+  Future<void> _initHiveBox() async {
+    // Open the Hive box for pressure data storage
+    _pressureBox = await Hive.openBox<PressureData>('pressure_data');
+  }
 
   // Real-time listeners
   DatabaseReference getPositionRef() => _dbRef.child('backpack/position');
@@ -55,6 +69,7 @@ class FirebaseService {
       'isCharging': data['isCharging'] ?? false,
     };
   }
+
   Stream<Map<String, double>?> bagPositionStream() {
     return getBagPositionRef().onValue.map((event) {
       final data = event.snapshot.value as Map?;
@@ -68,5 +83,39 @@ class FirebaseService {
       }
       return null;
     });
+  }
+
+  // ------------------- NEW FUNCTIONS -------------------
+
+  /// Starts listening to pressure updates and saves each data point locally with timestamp.
+  /// Call this once during app initialization.
+  void startPressureHistoryListener() {
+    getPressureRef().onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data == null) return;
+
+      // If the data is nested under a 'pressure' key, extract it
+      final pressureMap = data.containsKey('pressure') ? data['pressure'] as Map? : data;
+
+      if (pressureMap == null) return;
+
+      final left = (pressureMap['sensor1'] ?? 0).toDouble();
+      final right = (pressureMap['sensor2'] ?? 0).toDouble();
+      final net = (pressureMap['net'] ?? 0).toDouble();
+
+      final pressureData = PressureData(
+      timestamp: DateTime.now(),
+      left: left,
+      right: right,
+      net: net,
+      );
+
+      _pressureBox.add(pressureData);
+    });
+  }
+
+  /// Returns the list of stored pressure data points.
+  List<PressureData> getPressureHistory() {
+    return _pressureBox.values.toList();
   }
 }

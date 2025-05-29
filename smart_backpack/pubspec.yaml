@@ -36,13 +36,19 @@ dependencies:
   shared_preferences: ^2.2.2 
   timeago: ^3.5.0
   google_maps_flutter: ^2.5.0
-  geolocator: ^10.0.0
+  geolocator: ^14.0.1
   flutter_dotenv: ^5.1.0
-  firebase_messaging: 15.2.5
+  firebase_messaging: ^15.2.6
   awesome_notifications: ^0.10.1
   cupertino_icons: ^1.0.8
   flutter_polyline_points: ^2.0.0
-  geocoding: ^2.0.4
+  geocoding: ^4.0.0
+  fl_chart: ^0.70.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  build_runner: ^2.4.6
+  path_provider: ^2.0.14
+  hive_generator: ^2.0.0
 
 
 

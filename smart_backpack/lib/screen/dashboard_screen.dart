@@ -8,6 +8,7 @@ import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
 import '../widget/bag_overview_card.dart';
 import '../widget/info_card.dart';
+import 'package:smart_backpack/screen/pressure_analysis_screen.dart';
 import '../dialogs/pressure_adjustment_popup.dart';
 import '../widget/InsideBagPressure.dart';
 import '../widget/net_weight_widget.dart';
@@ -22,7 +23,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String orientation = 'UNKNOWN';
-  bool isWaterLeaking = false;
+  bool isWaterLeaking = true;
   double sensor1 = 0;
   double sensor2 = 0;
   double net = 0;
@@ -194,7 +195,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       };
     });
   }
-
   Future<void> _saveCardName(String cardKey, String name) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('${cardKey}_name', name);
@@ -229,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value;
         if (data != null) {
-          isWaterLeaking = data == true;
+          isWaterLeaking = data == 'false' || data == false;
           _checkAndTriggerNotifications();
         }
       });
@@ -578,6 +578,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const MapNavigationWidget(),
 
               const SizedBox(height: 20),
+
+              /// Pressure Analysis Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.analytics),
+                  label: const Text('Pressure Analysis'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PressureAnalysisScreen(firebaseService: _firebaseService),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -585,6 +610,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
+// Move these widget classes outside of DashboardScreen to the file scope:
 
 class LeftPressureIndicator extends StatelessWidget {
   final double sensor1;
