@@ -23,7 +23,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String orientation = 'UNKNOWN';
-  bool isWaterLeaking = true;
+  bool isWaterLeaking = false;
   double sensor1 = 0;
   double sensor2 = 0;
   double center = 0; // Not used in the current implementation

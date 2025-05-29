@@ -75,7 +75,6 @@ void main() async {
 
   // Create FirebaseService instance and start pressure listener
   final firebaseService = FirebaseService();
-  firebaseService.startPressureHistoryListener();
 
   // Run the app and pass firebaseService to the screen
   runApp(MyApp(firebaseService: firebaseService));
