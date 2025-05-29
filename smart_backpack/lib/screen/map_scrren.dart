@@ -13,7 +13,8 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
+class _MapScreenState extends State<MapScreen>
+    with SingleTickerProviderStateMixin {
   final Completer<GoogleMapController> _controller = Completer();
   final FirebaseService _firebaseService = FirebaseService();
   LatLng? _currentPosition;
@@ -37,7 +38,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
+    );
   }
 
   @override
@@ -77,7 +81,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   Future<String> _getPlaceName(LatLng position) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
       if (placemarks.isNotEmpty) {
         return "${placemarks.first.locality}, ${placemarks.first.country}";
       }
@@ -92,7 +99,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       if (data != null) {
         LatLng newPosition = LatLng(data['latitude']!, data['longitude']!);
         String placeName = await _getPlaceName(newPosition);
-        
+
         setState(() {
           _bagPosition = newPosition;
           _bagLocationName = placeName;
@@ -102,8 +109,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         // Check if bag is outside the safe zone
         if (_currentPosition != null) {
           double distance = Geolocator.distanceBetween(
-            _currentPosition!.latitude, _currentPosition!.longitude,
-            _bagPosition!.latitude, _bagPosition!.longitude,
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            _bagPosition!.latitude,
+            _bagPosition!.longitude,
           );
 
           if (distance > safeRadius) {
@@ -118,18 +127,19 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   void _showBagAlert(double distance) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Bag Alert 🚨"),
-        content: Text(
-          "Your bag is ${distance.toStringAsFixed(2)} meters away from the safe zone!",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+      builder:
+          (context) => AlertDialog(
+            title: const Text("Bag Alert 🚨"),
+            content: Text(
+              "Your bag is ${distance.toStringAsFixed(2)} meters away from the safe zone!",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -150,20 +160,24 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   Set<Marker> _buildMarkers() {
     final markers = <Marker>{};
     if (_currentPosition != null) {
-      markers.add(Marker(
-        markerId: const MarkerId('me'),
-        position: _currentPosition!,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        infoWindow: const InfoWindow(title: "You"),
-      ));
+      markers.add(
+        Marker(
+          markerId: const MarkerId('me'),
+          position: _currentPosition!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: const InfoWindow(title: "You"),
+        ),
+      );
     }
     if (_bagPosition != null) {
-      markers.add(Marker(
-        markerId: const MarkerId('bag'),
-        position: _bagPosition!,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(title: _bagLocationName),
-      ));
+      markers.add(
+        Marker(
+          markerId: const MarkerId('bag'),
+          position: _bagPosition!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: InfoWindow(title: _bagLocationName),
+        ),
+      );
     }
     return markers;
   }
@@ -172,7 +186,9 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
-      return const Scaffold(body: Center(child: Text("Google Maps API Key not found.")));
+      return const Scaffold(
+        body: Center(child: Text("Google Maps API Key not found.")),
+      );
     }
 
     return Scaffold(
@@ -180,19 +196,21 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       body: Stack(
         children: [
           Positioned.fill(
-            child: _currentPosition == null
-                ? const Center(child: CircularProgressIndicator())
-                : GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: _currentPosition!,
-                      zoom: 18,
+            child:
+                _currentPosition == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: _currentPosition!,
+                        zoom: 18,
+                      ),
+                      markers: _buildMarkers(),
+                      circles: _buildGeofence(), // ✅ Added safe zone circle
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: true,
+                      onMapCreated:
+                          (controller) => _controller.complete(controller),
                     ),
-                    markers: _buildMarkers(),
-                    circles: _buildGeofence(),  // ✅ Added safe zone circle
-                    myLocationEnabled: true,
-                    myLocationButtonEnabled: true,
-                    onMapCreated: (controller) => _controller.complete(controller),
-                  ),
           ),
           FadeTransition(
             opacity: _fadeAnimation,
@@ -200,18 +218,28 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               alignment: Alignment.bottomCenter,
               child: Container(
                 margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 10),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _bagPosition == null ? "Bag location not found." : "🎒 Bag is at $_bagLocationName",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      _bagPosition == null
+                          ? "Bag location not found."
+                          : "🎒 Bag is at $_bagLocationName",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     if (_bagPosition != null)
@@ -220,7 +248,9 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                         label: const Text("Navigate to Bag"),
                         onPressed: () async {
                           final controller = await _controller.future;
-                          controller.animateCamera(CameraUpdate.newLatLng(_bagPosition!));
+                          controller.animateCamera(
+                            CameraUpdate.newLatLng(_bagPosition!),
+                          );
                         },
                       ),
                   ],
