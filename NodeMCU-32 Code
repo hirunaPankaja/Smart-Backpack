@@ -1,0 +1,485 @@
+#include <SPI.h>
+#include <MFRC522.h>
+#include <WiFi.h>
+#include <FirebaseESP32.h>
+#include <Wire.h>
+#include <HardwareSerial.h>
+#include <DHT.h>
+
+// WiFi information
+#define WIFI_SSID "Dialog 4G 566"
+#define WIFI_PASSWORD "c06855C1"
+
+// Firebase information
+#define FIREBASE_HOST "esp32-test-a1771-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define FIREBASE_AUTH "ysNQiwmicmtA3RAZ99fN65bC2Q6suS2GC1W9kmpS"
+
+// RFID Pins
+#define RST_PIN 4
+#define SS_PIN 5
+#define SCK 18
+#define MISO 19
+#define MOSI 23
+
+// MPU6050 Settings
+#define MPU_ADDR 0x68
+
+// GPS Pins
+#define GPS_RX 26  // GPS TX -> ESP32 D26
+#define GPS_TX 27  // GPS RX -> ESP32 D27
+
+// DHT Sensor setup - Using GPIO 2 (D2 pin)
+#define DHTPIN 2
+#define DHTTYPE DHT22
+
+// Water Sensor
+#define WATER_SENSOR_PIN 36
+#define WATER_THRESHOLD 3500
+
+// Pressure Sensors
+#define PRESSURE_PIN 39      // Center pressure sensor
+#define LEFT_PRESSURE_PIN 32 // Left side pressure sensor
+#define RIGHT_PRESSURE_PIN 35 // Right side pressure sensor
+#define MAX_GRAMS 10000.0    // 10 kg = 10000 grams
+#define NO_PRESSURE_RAW 4095 // Value when no pressure
+#define MAX_PRESSURE_RAW 100 // Value at full 10kg load
+
+// Battery Monitoring
+#define BATTERY_PIN 34
+#define CHARGER_PIN 33
+#define NUM_SAMPLES 50
+#define VOLTAGE_DIVIDER_RATIO 2.0
+const float ADC_REF = 3.3;
+const float MAX_VOLTAGE = 4.2;
+const float MIN_VOLTAGE = 3.3;
+
+// Create objects
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+HardwareSerial GPS(2);  // Use Serial2
+DHT dht(DHTPIN, DHTTYPE);
+FirebaseData fbdo;
+FirebaseConfig config;
+FirebaseAuth auth;
+FirebaseJson json;
+
+void connectToWiFi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi");
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    Serial.print(".");
+    delay(500);
+    attempts++;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nFailed to connect!");
+    ESP.restart();
+  }
+  Serial.println("\nConnected!");
+}
+
+float readPressureGrams(int pressurePin) {
+  long sum = 0;
+  const int samples = 50;
+
+  for (int i = 0; i < samples; i++) {
+    sum += analogRead(pressurePin);
+    delay(2); // small delay to reduce noise
+  }
+
+  int avgRaw = sum / samples;
+  int effectiveValue = NO_PRESSURE_RAW - avgRaw;
+
+  // Convert to grams
+  float grams = map(effectiveValue, 
+                    0, 
+                    NO_PRESSURE_RAW - MAX_PRESSURE_RAW, 
+                    0, 
+                    MAX_GRAMS);
+
+  if (grams < 0) grams = 0;
+  return grams;
+}
+
+float calculateNetWeight(float left, float right) {
+  // Only consider weights above 1000g for each sensor
+  float leftContribution = (left > 1000) ? left : 0;
+  float rightContribution = (right > 1000) ? right : 0;
+  
+  // Calculate average of qualifying weights
+  if (leftContribution > 0 && rightContribution > 0) {
+    return (leftContribution + rightContribution) / 2;
+  } else if (leftContribution > 0 || rightContribution > 0) {
+    return (leftContribution + rightContribution); // Only one side qualifies
+  }
+  return 0; // Neither side qualifies
+}
+
+void readPressureSensors() {
+  float center_g = readPressureGrams(PRESSURE_PIN);
+  float left_g = readPressureGrams(LEFT_PRESSURE_PIN);
+  float right_g = readPressureGrams(RIGHT_PRESSURE_PIN);
+  float net_g = calculateNetWeight(left_g, right_g);
+  
+  Serial.print("Center: ");
+  Serial.print(center_g, 1);
+  Serial.print(" g | Left: ");
+  Serial.print(left_g, 1);
+  Serial.print(" g | Right: ");
+  Serial.print(right_g, 1);
+  Serial.print(" g | Net: ");
+  Serial.print(net_g, 1);
+  Serial.println(" g");
+
+  // Send to Firebase
+  if (Firebase.ready()) {
+    FirebaseJson pressureJson;
+    pressureJson.set("center", center_g);
+    pressureJson.set("left", left_g);
+    pressureJson.set("right", right_g);
+    pressureJson.set("net", net_g);
+    
+    if (Firebase.setJSON(fbdo, "/pressure", pressureJson)) {
+      Serial.println("Pressure data sent to Firebase");
+    } else {
+      Serial.println("Failed to send pressure data: " + fbdo.errorReason());
+    }
+  }
+}
+
+float readBatteryVoltage() {
+  long sum = 0;
+  for (int i = 0; i < NUM_SAMPLES; i++) {
+    sum += analogRead(BATTERY_PIN);
+    delay(2);
+  }
+  float avgRaw = sum / (float)NUM_SAMPLES;
+  float voltage = avgRaw * (ADC_REF / 4095.0) * VOLTAGE_DIVIDER_RATIO;
+  return voltage;
+}
+
+int getBatteryPercentage(float voltage) {
+  float percent = (voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE) * 100.0;
+  percent = constrain(percent, 0, 100);
+  return round(percent);
+}
+
+bool isChargerPlugged() {
+  return digitalRead(CHARGER_PIN) == HIGH;
+}
+
+void readBatteryStatus() {
+  float voltage = readBatteryVoltage();
+  int level = getBatteryPercentage(voltage);
+  bool isCharging = isChargerPlugged();
+
+  Serial.print("Battery Voltage: ");
+  Serial.print(voltage, 5);
+  Serial.print("V, Level: ");
+  Serial.print(level);
+  Serial.print("%, Charging: ");
+  Serial.println(isCharging ? "true" : "false");
+
+  // Upload values under /battery
+  if (Firebase.ready()) {
+    Firebase.setBool(fbdo, "/battery/isCharging", isCharging);
+    Firebase.setInt(fbdo, "/battery/level", level);
+    Firebase.setFloat(fbdo, "/battery/voltage", voltage);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000); // Give serial monitor time to connect
+  
+  Serial.println("\nStarting System...");
+  Serial.printf("Free Heap: %d\n", ESP.getFreeHeap());
+  
+  // Initialize RFID
+  SPI.begin(SCK, MISO, MOSI, SS_PIN);
+  mfrc522.PCD_Init();
+  Serial.println("RFID Reader Ready");
+
+  // Initialize GPS
+  GPS.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+  Serial.println("GPS Reader Ready");
+
+  // Initialize DHT sensor
+  dht.begin();
+  Serial.println("DHT Sensor Ready");
+
+  // Initialize battery monitoring
+  pinMode(CHARGER_PIN, INPUT);
+  Serial.println("Battery Monitor Ready");
+
+  // Connect to WiFi
+  connectToWiFi();
+  Serial.print("Connected! IP: ");
+  Serial.println(WiFi.localIP());
+
+  // Configure Firebase
+  config.host = FIREBASE_HOST;
+  config.signer.tokens.legacy_token = FIREBASE_AUTH;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  // Initialize MPU6050
+  Wire.begin(21, 22); // SDA=21, SCL=22
+  delay(1000);
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x6B); // Power management register
+  Wire.write(0);    // Wake up!
+  Wire.endTransmission(true);
+  
+  Serial.println("System Ready!");
+}
+
+void readWaterSensor() {
+  static bool lastState = false;
+  
+  if (!Firebase.ready()) {
+    Serial.println("Firebase not ready!");
+    delay(1000);
+    return;
+  }
+
+  int sensorValue = analogRead(WATER_SENSOR_PIN);
+  bool waterDetected = sensorValue > WATER_THRESHOLD;
+  
+  Serial.printf("Water Sensor: %d, State: %s, Heap: %d\n", 
+               sensorValue, 
+               waterDetected ? "WET" : "DRY",
+               ESP.getFreeHeap());
+
+  if (waterDetected != lastState) {
+    if (Firebase.setBool(fbdo, "/water-leak-detection/water-leak", waterDetected)) {
+      Serial.println("Water state updated in Firebase");
+      lastState = waterDetected;
+    } else {
+      Serial.println("Firebase error: " + fbdo.errorReason());
+    }
+  }
+}
+
+void readMPU6050() {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU_ADDR, 6, true);
+  
+  int16_t ax = Wire.read() << 8 | Wire.read();
+  int16_t ay = Wire.read() << 8 | Wire.read();
+  int16_t az = Wire.read() << 8 | Wire.read();
+  
+  float x = ax / 16384.0;
+  float y = ay / 16384.0;
+  float z = az / 16384.0;
+
+  String position;
+  if (abs(z) > 0.8) {
+    position = "VERTICAL";
+  } else if (abs(y) > 0.8) {
+    position = "ON_SIDE";
+  } else if (abs(x) > 0.8) {
+    position = "HORIZONTAL";
+  } else {
+    position = "UNKNOWN";
+  }
+
+  Serial.print("Position: ");
+  Serial.print(position);
+  Serial.print(" | X: ");
+  Serial.print(x);
+  Serial.print(" Y: ");
+  Serial.print(y);
+  Serial.print(" Z: ");
+  Serial.println(z);
+
+  if (Firebase.setString(fbdo, "/backpack/position", position)) {
+    Serial.println("MPU data sent to Firebase!");
+  } else {
+    Serial.println("Firebase error: " + fbdo.errorReason());
+  }
+
+  Firebase.setFloat(fbdo, "/backpack/sensor/x", x);
+  Firebase.setFloat(fbdo, "/backpack/sensor/y", y);
+  Firebase.setFloat(fbdo, "/backpack/sensor/z", z);
+}
+
+void readRFID() {
+  // Look for cards
+  if (!mfrc522.PICC_IsNewCardPresent()) {
+    return;
+  }
+  
+  if (!mfrc522.PICC_ReadCardSerial()) {
+    return;
+  }
+
+  // Get card UID
+  String uid = "";
+  for (byte i = 0; i < mfrc522.uid.size; i++) {
+    if (mfrc522.uid.uidByte[i] < 0x10) uid += "0";
+    uid += String(mfrc522.uid.uidByte[i], HEX);
+  }
+  uid.toUpperCase();
+  
+  Serial.print("Card UID: ");
+  Serial.println(uid);
+
+  // Check current status
+  String statusPath = "/cards/" + uid + "/status";
+  if (Firebase.getString(fbdo, statusPath)) {
+    // UID exists - toggle status
+    String currentStatus = fbdo.stringData();
+    String newStatus = (currentStatus == "IN") ? "OUT" : "IN";
+    
+    // Update only the status (no logs)
+    if (Firebase.setString(fbdo, statusPath, newStatus)) {
+      Serial.println("Status changed to: " + newStatus);
+    } else {
+      Serial.println("Failed to update status: " + fbdo.errorReason());
+    }
+  } else {
+    // New UID - set to IN
+    if (Firebase.setString(fbdo, statusPath, "IN")) {
+      Serial.println("New UID registered - Status set to IN");
+    } else {
+      Serial.println("Failed to register new UID: " + fbdo.errorReason());
+    }
+  }
+
+  // Proper reset
+  mfrc522.PICC_HaltA();
+  mfrc522.PCD_StopCrypto1();
+}
+
+void readGPS() {
+  if (GPS.available()) {
+    String data = GPS.readStringUntil('\n');
+    
+    if (data.startsWith("$GPGGA")) {
+      // Parse Latitude & Longitude
+      int firstComma = data.indexOf(',');
+      int secondComma = data.indexOf(',', firstComma + 1);
+      int thirdComma = data.indexOf(',', secondComma + 1);
+      int fourthComma = data.indexOf(',', thirdComma + 1);
+      int fifthComma = data.indexOf(',', fourthComma + 1);
+      int sixthComma = data.indexOf(',', fifthComma + 1);
+
+      String lat = data.substring(secondComma + 1, thirdComma);
+      String latDir = data.substring(thirdComma + 1, fourthComma);
+      String lon = data.substring(fourthComma + 1, fifthComma);
+      String lonDir = data.substring(fifthComma + 1, sixthComma);
+
+      if (lat.length() > 0 && lon.length() > 0) {
+        // Convert to decimal degrees
+        float latitude = convertToDecimal(lat, latDir);
+        float longitude = convertToDecimal(lon, lonDir);
+
+        Serial.print("Latitude: ");
+        Serial.println(latitude, 6);
+        Serial.print("Longitude: ");
+        Serial.println(longitude, 6);
+
+        // Save to Firebase
+        if (Firebase.setFloat(fbdo, "/gps/latitude", latitude) && 
+            Firebase.setFloat(fbdo, "/gps/longitude", longitude)) {
+          Serial.println("✅ Saved to Firebase!");
+        } else {
+          Serial.println("❌ Error: " + fbdo.errorReason());
+        }
+      }
+    }
+  }
+}
+
+void readDHT() {
+  // Read sensor data
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  
+  // Check if reading succeeded
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  
+  // Print to serial monitor
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print("°C, Humidity: ");
+  Serial.print(humidity);
+  Serial.println("%");
+  
+  // Prepare data for Firebase
+  json.set("/temperature", temperature);
+  json.set("/humidity", humidity);
+  json.set("/timestamp", millis());
+  
+  // Send to Firebase
+  if (Firebase.updateNode(fbdo, "/sensorData", json)) {
+    Serial.println("DHT data sent to Firebase!");
+  } else {
+    Serial.println("Failed to send DHT data");
+    Serial.println("Reason: " + fbdo.errorReason());
+  }
+}
+
+// Helper function to convert GPS format to decimal degrees
+float convertToDecimal(String coord, String dir) {
+  float deg = coord.substring(0, dir == "N" || dir == "S" ? 2 : 3).toFloat();
+  float minutes = coord.substring(dir == "N" || dir == "S" ? 2 : 3).toFloat();
+  float decimal = deg + (minutes / 60.0);
+  if (dir == "S" || dir == "W") decimal *= -1;
+  return decimal;
+}
+
+void loop() {
+  // Check RFID every 50ms
+  readRFID();
+  
+  // Check MPU6050 every second
+  static unsigned long lastMPUCheck = 0;
+  if (millis() - lastMPUCheck >= 1000) {
+    readMPU6050();
+    lastMPUCheck = millis();
+  }
+  
+  // Check GPS every 2 seconds
+  static unsigned long lastGPSCheck = 0;
+  if (millis() - lastGPSCheck >= 2000) {
+    readGPS();
+    lastGPSCheck = millis();
+  }
+  
+  // Check DHT sensor every 2 seconds
+  static unsigned long lastDHTCheck = 0;
+  if (millis() - lastDHTCheck >= 2000) {
+    readDHT();
+    lastDHTCheck = millis();
+  }
+  
+  // Check water sensor every 2 seconds
+  static unsigned long lastWaterCheck = 0;
+  if (millis() - lastWaterCheck >= 2000) {
+    readWaterSensor();
+    lastWaterCheck = millis();
+  }
+  
+  // Check pressure sensors every 2 seconds
+  static unsigned long lastPressureCheck = 0;
+  if (millis() - lastPressureCheck >= 2000) {
+    readPressureSensors();
+    lastPressureCheck = millis();
+  }
+  
+  // Check battery status every 5 seconds
+  static unsigned long lastBatteryCheck = 0;
+  if (millis() - lastBatteryCheck >= 5000) {
+    readBatteryStatus();
+    lastBatteryCheck = millis();
+  }
+  
+  delay(50);
+}
