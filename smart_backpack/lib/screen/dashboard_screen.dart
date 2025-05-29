@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:smart_backpack/widget/MapNavigationWidget.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import '../service/firebase_service.dart';
 import '../widget/battery_indicator.dart';
 import '../widget/blinking_card.dart';
@@ -23,20 +23,22 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   String orientation = 'UNKNOWN';
   bool isWaterLeaking = false;
-  bool _waterLeakNotified = false;
   double sensor1 = 0;
   double sensor2 = 0;
   double net = 0;
-  bool _overweightNotified = false;
   Map<String, String> cardNames = {};
   Map<String, String> cardStatuses = {};
-  Set<String> _missingCardNotified = {};
   double batteryLevel = 0;
   bool isCharging = false;
   bool _isOnline = true;
   DateTime? _lastSyncTime;
   double temperature = 0.0;
   double humidity = 0.0;
+
+  // Previous state tracking for notifications
+  bool _previousWaterLeakState = false;
+  Map<String, String> _previousCardStatuses = {};
+  bool _previousOverweightState = false;
 
   final FirebaseService _firebaseService = FirebaseService();
   late DatabaseReference _positionRef;
@@ -47,53 +49,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late DatabaseReference _temperatureRef;
   late DatabaseReference _humidityRef;
 
-  // Notification setup
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
     _loadCardNames();
     _setupRealTimeListeners();
   }
 
-  Future<void> _initializeNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
+  // Show water leak notification
+  Future<void> _showWaterLeakNotification() async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 1,
+        channelKey: 'smart_backpack_alerts',
+        title: '💧 Water Leak Detected!',
+        body: 'Your smart backpack has detected a water leak. Please check immediately.',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.red,
+        backgroundColor: Colors.red,
+        category: NotificationCategory.Alarm,
+        wakeUpScreen: true,
+        fullScreenIntent: true,
+        criticalAlert: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
     );
-
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  Future<void> _showNotification(
-      String title, String body, String channelId, String channelName) async {
-    const AndroidNotificationDetails androidNotificationDetails =
-        AndroidNotificationDetails(
-      'smart_backpack_alerts',
-      'Smart Backpack Alerts',
-      channelDescription: 'Alerts from your Smart Backpack',
-      importance: Importance.high,
-      priority: Priority.high,
-      ticker: 'ticker',
-      sound: RawResourceAndroidNotificationSound('notification'),
-      playSound: true,
+  // Show missing card notification
+  Future<void> _showMissingCardNotification(List<String> missingCards) async {
+    String cardList = missingCards.join(', ');
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 2,
+        channelKey: 'smart_backpack_alerts',
+        title: '🎯 Items Missing!',
+        body: 'Missing items: $cardList. Don\'t forget your essentials!',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.orange,
+        backgroundColor: Colors.orange,
+        category: NotificationCategory.Reminder,
+        wakeUpScreen: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
     );
+  }
 
-    const NotificationDetails notificationDetails =
-        NotificationDetails(android: androidNotificationDetails);
-
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      title,
-      body,
-      notificationDetails,
+  // Show overweight notification
+  Future<void> _showOverweightNotification() async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 3,
+        channelKey: 'smart_backpack_alerts',
+        title: '⚖️ Overweight Detected!',
+        body: 'Your backpack is too heavy. Consider removing some items to avoid strain.',
+        notificationLayout: NotificationLayout.Default,
+        color: Colors.redAccent,
+        backgroundColor: Colors.redAccent,
+        category: NotificationCategory.Alarm,
+        wakeUpScreen: true,
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'DISMISS',
+          label: 'Dismiss',
+          actionType: ActionType.SilentAction,
+        ),
+      ],
     );
+  }
+
+  // Check and trigger notifications based on state changes
+  void _checkAndTriggerNotifications() {
+    // Water leak notification
+    if (isWaterLeaking && !_previousWaterLeakState) {
+      _showWaterLeakNotification();
+    }
+    _previousWaterLeakState = isWaterLeaking;
+
+    // Missing cards notification
+    final currentMissingCards = cardStatuses.entries
+        .where((entry) => entry.value == 'OUT')
+        .map((entry) {
+          final index = cardStatuses.keys.toList().indexOf(entry.key);
+          return index < cardNames.length
+              ? cardNames.values.elementAt(index)
+              : 'Card ${index + 1}';
+        })
+        .toList();
+
+    final previousMissingCards = _previousCardStatuses.entries
+        .where((entry) => entry.value == 'OUT')
+        .map((entry) {
+          final index = _previousCardStatuses.keys.toList().indexOf(entry.key);
+          return index < cardNames.length
+              ? cardNames.values.elementAt(index)
+              : 'Card ${index + 1}';
+        })
+        .toList();
+
+    if (currentMissingCards.isNotEmpty && 
+        (currentMissingCards.length != previousMissingCards.length ||
+         !currentMissingCards.every((card) => previousMissingCards.contains(card)))) {
+      _showMissingCardNotification(currentMissingCards);
+    }
+    _previousCardStatuses = Map.from(cardStatuses);
+
+    // Overweight notification (considering either sensor > 5kg as overweight)
+    bool currentOverweightState = sensor1 > 5 || sensor2 > 5;
+    if (currentOverweightState && !_previousOverweightState) {
+      _showOverweightNotification();
+    }
+    _previousOverweightState = currentOverweightState;
   }
 
   String getSyncStatusText() {
@@ -150,19 +229,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value;
         if (data != null) {
-          final newLeakStatus = data == true;
-          if (newLeakStatus && !_waterLeakNotified) {
-            _showNotification(
-              'Water Leak Detected!',
-              'Your backpack has detected water leakage. Check immediately!',
-              'water_leak_channel',
-              'Water Leak Alerts',
-            );
-            _waterLeakNotified = true;
-          } else if (!newLeakStatus) {
-            _waterLeakNotified = false;
-          }
-          isWaterLeaking = newLeakStatus;
+          isWaterLeaking = data == true;
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -176,19 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           sensor1 = double.tryParse(data['sensor1'].toString()) ?? 0;
           sensor2 = double.tryParse(data['sensor2'].toString()) ?? 0;
           net = double.tryParse(data['net'].toString()) ?? 0;
-
-          // Check for overweight condition (assuming threshold is 5kg)
-          if ((sensor1 > 5 || sensor2 > 5) && !_overweightNotified) {
-            _showNotification(
-              'Overweight Alert!',
-              'Your backpack might be too heavy. One side has ${sensor1 > 5 ? sensor1 : sensor2} kg.',
-              'overweight_channel',
-              'Overweight Alerts',
-            );
-            _overweightNotified = true;
-          } else if (sensor1 <= 5 && sensor2 <= 5) {
-            _overweightNotified = false;
-          }
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -199,40 +255,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _lastSyncTime = DateTime.now();
         final data = event.snapshot.value as Map?;
         if (data != null) {
-          final newCardStatuses = Map<String, String>.from(
+          cardStatuses = Map<String, String>.from(
             data.map(
               (key, value) =>
                   MapEntry(key.toString(), (value as Map)['status'].toString()),
             ),
           );
-
-          // Check for missing cards
-          final missingCards = newCardStatuses.entries
-              .where((entry) => entry.value == 'OUT')
-              .map((entry) => entry.key)
-              .toSet();
-
-          // Notify for newly missing cards
-          for (final cardId in missingCards) {
-            if (!_missingCardNotified.contains(cardId)) {
-              final cardName = cardNames['card${cardId.split('card').last}'] ??
-                  'Card ${cardId.split('card').last}';
-              _showNotification(
-                'Item Missing!',
-                '$cardName is not detected in your backpack.',
-                'missing_item_channel',
-                'Missing Item Alerts',
-              );
-              _missingCardNotified.add(cardId);
-            }
-          }
-
-          // Remove returned cards from notification tracking
-          _missingCardNotified.removeWhere((cardId) =>
-              !missingCards.contains(cardId) ||
-              newCardStatuses[cardId] == 'IN');
-
-          cardStatuses = newCardStatuses;
+          _checkAndTriggerNotifications();
         }
       });
     });
@@ -464,8 +493,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: '${temperature.toStringAsFixed(1)}°C | ${humidity.toStringAsFixed(1)}%',
                     iconColor: (temperature > 35 || humidity > 80) ? Colors.redAccent : Colors.blueAccent,
                     cardColor: (temperature > 35 || humidity > 80) 
-                      ? const Color.fromARGB(255, 231, 3, 3).withOpacity(0.4)
-                      : Colors.white,
+                        ? const Color.fromARGB(255, 231, 3, 3).withOpacity(0.4)
+                        : Colors.white,
                     textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
 

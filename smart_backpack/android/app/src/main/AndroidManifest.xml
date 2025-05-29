@@ -6,11 +6,17 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <application
         android:label="smart_backpack"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <receiver android:name="me.carda.awesome_notifications.notifications.receivers.AwesomeNotificationReceiver" android:exported="true"/>
+        <receiver android:name="me.carda.awesome_notifications.notifications.receivers.DismissedNotificationReceiver" android:exported="true"/>
+
 
         <!-- Google Maps API Key -->
         <meta-data
