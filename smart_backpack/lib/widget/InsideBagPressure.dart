@@ -187,7 +187,7 @@ class _InsideBagPressureWidgetState extends State<InsideBagPressureWidget> {
             Text(
               _hasError 
                   ? "Error" 
-                  : "${_centerPressure.toStringAsFixed(2)} kg",
+                  : "${_centerPressure.toStringAsFixed(2)} g",
               style: TextStyle(
                 color: _pressureColor,
                 fontSize: 18,
@@ -216,9 +216,9 @@ class _InsideBagPressureWidgetState extends State<InsideBagPressureWidget> {
           controller: _pressureController,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            labelText: 'New Pressure (kg)',
+            labelText: 'New Pressure (g)',
             border: OutlineInputBorder(),
-            suffixText: 'kg',
+            suffixText: 'g',
             errorText: _hasError ? 'Failed to update' : null,
           ),
           style: TextStyle(

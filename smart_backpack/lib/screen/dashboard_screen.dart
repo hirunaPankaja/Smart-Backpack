@@ -636,7 +636,7 @@ class LeftPressureIndicator extends StatelessWidget {
           Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
-            "$left kg",
+            "$left g",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -668,7 +668,7 @@ class RightPressureIndicator extends StatelessWidget {
           Image.asset(imagePath, width: 80, height: 80),
           const SizedBox(height: 6),
           Text(
-            "$right kg",
+            "$right g",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

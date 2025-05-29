@@ -29,7 +29,7 @@ class NetWeightWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "${netWeight.toStringAsFixed(2)} kg",
+                "${netWeight.toStringAsFixed(2)} g",
                 style: TextStyle(
                   color: netWeight > 8 ? Colors.red : Colors.black,
                   fontSize: 18,
