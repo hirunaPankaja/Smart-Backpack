@@ -82,7 +82,7 @@ To better understand how the components are set up in the backpack, refer to the
 
 - [Hiruna Pankaja](https://github.com/hirunaPankaja) – Hardware & Software Engineer  
 - [Dhanani Chathumini](https://github.com/DhananiChathumini) – Mobile App Developer  
-- [Vikum Prabhath](https://github.com/VikumPrabhath) – Mobile App Developer  
+- [Vikum Prabhath](https://github.com/VikumPrabhath) – Hardware & Software Engineer  
 - [Yasith Pasindu](https://github.com/yasithh1) – Hardware & Software Engineer
 
 
